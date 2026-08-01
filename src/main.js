@@ -1,6 +1,7 @@
 /**
- * Harmony AI – Main Application Entry
+ * Harmony AI – Main Application Entry (Production Ready)
  * Orchestrates Auth, Web Playback SDK, Device Management, Chat UI & Agent.
+ * Fully synced with the current dashboard index.html
  */
 
 import { login, logout, isLoggedIn, exchangeCodeForToken } from './auth.js';
@@ -8,10 +9,12 @@ import * as api from './spotify-api.js';
 import * as player from './player.js';
 import { processMessage } from './agent.js';
 
-// DOM elements
+// ── DOM references (matched to current index.html) ──────────────────
 const btnLogin = document.getElementById('btn-login');
 const btnLogout = document.getElementById('btn-logout');
-const userInfo = document.getElementById('user-info');
+const userChip = document.getElementById('user-chip');
+const userName = document.getElementById('user-name');
+const userPlan = document.getElementById('user-plan');
 const agentStatus = document.getElementById('agent-status');
 const chatMessages = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
@@ -19,6 +22,7 @@ const chatInput = document.getElementById('chat-input');
 const btnSend = document.getElementById('btn-send');
 const deviceList = document.getElementById('device-list');
 const btnRefreshDevices = document.getElementById('btn-refresh-devices');
+const btnRefreshDevices2 = document.getElementById('btn-refresh-devices-2');
 const trackName = document.getElementById('track-name');
 const trackArtist = document.getElementById('track-artist');
 const trackArt = document.getElementById('track-art');
@@ -26,15 +30,29 @@ const btnPlay = document.getElementById('btn-play');
 const btnPrev = document.getElementById('btn-prev');
 const btnNext = document.getElementById('btn-next');
 const volumeSlider = document.getElementById('volume');
+const premiumBanner = document.getElementById('premium-banner');
+const settingsAccount = document.getElementById('settings-account');
+const settingsPlan = document.getElementById('settings-plan');
+const settingsSdk = document.getElementById('settings-sdk');
+const settingsRedirect = document.getElementById('settings-redirect');
+const activeDeviceName = document.getElementById('active-device-name');
+const activeDeviceType = document.getElementById('active-device-type');
+const viewTitle = document.getElementById('view-title');
 
 let currentUser = null;
 let currentDeviceId = null;
 let devices = [];
+let isPremium = false;
 
-// ── Bootstrap ─────────────────────────────────────
+// ── Bootstrap ───────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
+  // Navigation
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+  });
+
   btnLogin?.addEventListener('click', () => login());
   btnLogout?.addEventListener('click', () => {
     logout();
@@ -45,6 +63,7 @@ async function init() {
 
   chatForm?.addEventListener('submit', handleChatSubmit);
   btnRefreshDevices?.addEventListener('click', refreshDevices);
+  btnRefreshDevices2?.addEventListener('click', refreshDevices);
   btnPlay?.addEventListener('click', () => player.togglePlay());
   btnPrev?.addEventListener('click', () => player.previousTrack());
   btnNext?.addEventListener('click', () => player.nextTrack());
@@ -55,17 +74,23 @@ async function init() {
     btn.addEventListener('click', () => handleQuickAction(btn.dataset.action));
   });
 
+  // Show current redirect URI in settings
+  if (settingsRedirect) {
+    settingsRedirect.textContent = window.location.origin + '/callback';
+  }
+
   // Handle OAuth callback
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   if (code) {
     try {
-      agentStatus.textContent = 'Authenticating...';
+      if (agentStatus) agentStatus.textContent = 'Authenticating...';
       await exchangeCodeForToken(code);
       window.history.replaceState({}, document.title, '/');
       await onAuthenticated();
     } catch (err) {
       addMessage('agent', `Login error: ${err.message}`);
+      setLoggedOutUI();
     }
     return;
   }
@@ -77,26 +102,49 @@ async function init() {
   }
 }
 
+function switchView(viewName) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  const view = document.getElementById(`view-${viewName}`);
+  const nav = document.querySelector(`[data-view="${viewName}"]`);
+  if (view) view.classList.add('active');
+  if (nav) nav.classList.add('active');
+
+  if (viewTitle) {
+    const titles = { dashboard: 'Dashboard', devices: 'Devices', agent: 'AI Agent', settings: 'Settings' };
+    viewTitle.textContent = titles[viewName] || 'Dashboard';
+  }
+}
+
 async function onAuthenticated() {
   try {
     const productInfo = await api.getUserProduct();
     currentUser = await api.getCurrentUser();
+    isPremium = productInfo.isPremium;
     localStorage.setItem('spotify_user', JSON.stringify(currentUser));
 
-    setLoggedInUI();
+    setLoggedInUI(productInfo);
 
-    if (!productInfo.isPremium) {
+    if (!isPremium) {
       addMessage('agent', `Welcome, ${productInfo.display_name}!\n\n⚠️ Your account is on Spotify Free.\n\nFull playback control, transfer to iPhone, and the Web Playback device require Spotify Premium.\n\nYou can still:\n• Search tracks\n• View your library & top tracks\n• List available devices\n\nUpgrade to Premium to unlock the complete Harmony AI agent.`);
-      agentStatus.textContent = 'Free plan';
-      agentStatus.classList.remove('online');
+      if (agentStatus) {
+        agentStatus.textContent = 'Free plan';
+        agentStatus.classList.remove('online');
+      }
+      if (premiumBanner) premiumBanner.style.display = 'flex';
     } else {
       addMessage('agent', `Welcome back, ${productInfo.display_name}! Premium detected. I'm ready to control your Spotify and transfer to iPhone.`);
+      if (premiumBanner) premiumBanner.style.display = 'none';
 
       await player.initPlayer(
         (deviceId) => {
           currentDeviceId = deviceId;
-          agentStatus.textContent = 'Online';
-          agentStatus.classList.add('online');
+          if (agentStatus) {
+            agentStatus.textContent = 'Online';
+            agentStatus.classList.add('online');
+          }
+          if (settingsSdk) settingsSdk.textContent = 'On';
           refreshDevices();
         },
         (state) => updateNowPlaying(state)
@@ -118,24 +166,43 @@ async function onAuthenticated() {
   }
 }
 
-function setLoggedInUI() {
+function setLoggedInUI(productInfo) {
   btnLogin?.classList.add('hidden');
   btnLogout?.classList.remove('hidden');
-  userInfo?.classList.remove('hidden');
-  if (userInfo && currentUser) userInfo.textContent = currentUser.display_name || 'Connected';
-  chatInput.disabled = false;
-  btnSend.disabled = false;
+  userChip?.classList.remove('hidden');
+
+  if (userName) userName.textContent = productInfo?.display_name || currentUser?.display_name || 'Connected';
+  if (userPlan) {
+    userPlan.textContent = productInfo?.isPremium ? 'Premium' : 'Free';
+    userPlan.className = 'plan-badge ' + (productInfo?.isPremium ? 'premium' : 'free');
+  }
+  if (settingsAccount) settingsAccount.textContent = productInfo?.display_name || currentUser?.display_name || 'Connected';
+  if (settingsPlan) {
+    settingsPlan.textContent = productInfo?.isPremium ? 'Premium' : 'Free';
+  }
+
+  if (chatInput) chatInput.disabled = false;
+  if (btnSend) btnSend.disabled = false;
 }
 
 function setLoggedOutUI() {
   btnLogin?.classList.remove('hidden');
   btnLogout?.classList.add('hidden');
-  userInfo?.classList.add('hidden');
-  agentStatus.textContent = 'Ready';
-  agentStatus.classList.remove('online');
-  chatInput.disabled = true;
-  btnSend.disabled = true;
-  deviceList.innerHTML = '<li class="muted">Connect Spotify to see devices</li>';
+  userChip?.classList.add('hidden');
+
+  if (agentStatus) {
+    agentStatus.textContent = 'Ready';
+    agentStatus.classList.remove('online');
+  }
+  if (chatInput) chatInput.disabled = true;
+  if (btnSend) btnSend.disabled = true;
+  if (deviceList) deviceList.innerHTML = '<li class="muted">Connect Spotify to see devices</li>';
+  if (activeDeviceName) activeDeviceName.textContent = 'No device';
+  if (activeDeviceType) activeDeviceType.textContent = 'Connect Spotify to see devices';
+  if (settingsAccount) settingsAccount.textContent = 'Not connected';
+  if (settingsPlan) settingsPlan.textContent = 'Free';
+  if (settingsSdk) settingsSdk.textContent = 'Off';
+  if (premiumBanner) premiumBanner.style.display = 'none';
 }
 
 async function refreshDevices() {
@@ -143,6 +210,16 @@ async function refreshDevices() {
     const data = await api.getDevices();
     devices = data.devices || [];
     renderDevices();
+
+    // Update active device card
+    const active = devices.find(d => d.is_active);
+    if (active) {
+      if (activeDeviceName) activeDeviceName.textContent = active.name;
+      if (activeDeviceType) activeDeviceType.textContent = active.type;
+    } else if (devices.length > 0) {
+      if (activeDeviceName) activeDeviceName.textContent = devices[0].name;
+      if (activeDeviceType) activeDeviceType.textContent = devices[0].type + ' (not active)';
+    }
   } catch (err) {
     console.error('Devices error:', err);
   }
@@ -151,7 +228,7 @@ async function refreshDevices() {
 function renderDevices() {
   if (!deviceList) return;
   if (devices.length === 0) {
-    deviceList.innerHTML = '<li class="muted">No devices found</li>';
+    deviceList.innerHTML = '<li class="muted">No devices found. Open Spotify on your phone or computer.</li>';
     return;
   }
   deviceList.innerHTML = devices.map(d => `
@@ -166,7 +243,7 @@ function renderDevices() {
       try {
         await api.transferPlayback(li.dataset.id, true);
         addMessage('agent', `Transferred to “${li.textContent.trim()}”.`);
-        setTimeout(refreshDevices, 1000);
+        setTimeout(refreshDevices, 1200);
       } catch (e) {
         addMessage('agent', `Transfer failed: ${e.message}`);
       }
@@ -189,23 +266,34 @@ async function handleChatSubmit(e) {
 }
 
 async function handleQuickAction(action) {
-  if (action === 'play-top') {
-    await handleChatSubmit({ preventDefault: () => {}, target: null });
-    chatInput.value = 'play my top tracks';
-    chatForm.dispatchEvent(new Event('submit'));
-  } else if (action === 'recent') {
-    chatInput.value = 'recently played';
-    chatForm.dispatchEvent(new Event('submit'));
-  } else if (action === 'transfer-self') {
-    chatInput.value = 'transfer to this agent';
-    chatForm.dispatchEvent(new Event('submit'));
-  } else if (action === 'transfer-iphone') {
-    chatInput.value = 'transfer to iPhone 17 Pro';
-    chatForm.dispatchEvent(new Event('submit'));
+  const map = {
+    'play-top': 'play my top tracks',
+    'recent': 'recently played',
+    'list-devices': 'list devices',
+    'transfer-self': 'transfer to this agent',
+    'transfer-iphone': 'transfer to iPhone 17 Pro',
+    'transfer-tws': 'transfer to my headphones',
+    'help': 'help'
+  };
+  const cmd = map[action];
+  if (!cmd) return;
+
+  // Switch to agent view for chat commands
+  if (['play-top', 'recent', 'list-devices', 'help'].includes(action)) {
+    switchView('agent');
+  }
+
+  addMessage('user', cmd);
+  try {
+    const result = await processMessage(cmd, { user: currentUser, devices, currentDeviceId });
+    addMessage('agent', result.reply);
+  } catch (err) {
+    addMessage('agent', `Error: ${err.message}`);
   }
 }
 
 function addMessage(role, text) {
+  if (!chatMessages) return;
   const div = document.createElement('div');
   div.className = `message ${role}`;
   div.innerHTML = `<div class="bubble">${text.replace(/\n/g, '<br>')}</div>`;
@@ -216,20 +304,20 @@ function addMessage(role, text) {
 function updateNowPlaying(state) {
   if (!state || !state.track_window?.current_track) return;
   const track = state.track_window.current_track;
-  trackName.textContent = track.name;
-  trackArtist.textContent = track.artists.map(a => a.name).join(', ');
-  if (track.album?.images?.[0]) {
+  if (trackName) trackName.textContent = track.name;
+  if (trackArtist) trackArtist.textContent = track.artists.map(a => a.name).join(', ');
+  if (trackArt && track.album?.images?.[0]) {
     trackArt.src = track.album.images[0].url;
     trackArt.classList.remove('hidden');
   }
-  btnPlay.textContent = state.paused ? '▶️' : '⏸';
+  if (btnPlay) btnPlay.textContent = state.paused ? '▶️' : '⏸';
 }
 
 function updateNowPlayingFromApi(state) {
   if (!state?.item) return;
-  trackName.textContent = state.item.name;
-  trackArtist.textContent = state.item.artists.map(a => a.name).join(', ');
-  if (state.item.album?.images?.[0]) {
+  if (trackName) trackName.textContent = state.item.name;
+  if (trackArtist) trackArtist.textContent = state.item.artists.map(a => a.name).join(', ');
+  if (trackArt && state.item.album?.images?.[0]) {
     trackArt.src = state.item.album.images[0].url;
     trackArt.classList.remove('hidden');
   }
