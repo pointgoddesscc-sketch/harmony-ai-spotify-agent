@@ -1,19 +1,19 @@
 /**
  * Harmony AI – Main Application Entry (Production Ready)
  * Orchestrates Auth, Web Playback SDK, Device Management, Chat UI & Agent.
- * Fully synced with the current dashboard index.html
- * OrgSuite Edition – Premium UI + Connectors + Real-time Polling
+ * OrgSuite Edition – Premium UI + Connectors + Polling + Missing-key handling
  */
 
-import { login, logout, isLoggedIn, exchangeCodeForToken } from './auth.js';
+import { login, logout, isLoggedIn, exchangeCodeForToken, hasValidClientId, getConfigError } from './auth.js';
 import * as api from './spotify-api.js';
 import * as player from './player.js';
 import { processMessage } from './agent.js';
 import { updateDevModeBadge, handlePremiumBanner } from './premium-ui.js';
 import { renderConnectors, updateSpotifyConnectorStatus } from './connectors.js';
 import { startPolling, stopPolling } from './polling.js';
+import { showMissingKeyWarning } from './config-check.js';
 
-// ── DOM references (matched to current index.html) ──────────────────
+// ── DOM references ──────────────────────────────────────────────────
 const btnLogin = document.getElementById('btn-login');
 const btnLogout = document.getElementById('btn-logout');
 const userChip = document.getElementById('user-chip');
@@ -47,19 +47,30 @@ let currentDeviceId = null;
 let devices = [];
 let isPremium = false;
 
-// ── Bootstrap ───────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
-  // Render connector status immediately
   renderConnectors();
+  showMissingKeyWarning();
 
-  // Navigation
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
 
-  btnLogin?.addEventListener('click', () => login());
+  btnLogin?.addEventListener('click', async () => {
+    try {
+      await login();
+    } catch (err) {
+      const msg = err.message || 'Could not start Spotify login.';
+      addMessage('agent', `⚠️ ${msg}`);
+      if (agentStatus) {
+        agentStatus.textContent = 'Config error';
+        agentStatus.classList.remove('online');
+      }
+      showMissingKeyWarning();
+    }
+  });
+
   btnLogout?.addEventListener('click', () => {
     logout();
     player.disconnect();
@@ -76,17 +87,15 @@ async function init() {
   btnNext?.addEventListener('click', () => player.nextTrack());
   volumeSlider?.addEventListener('input', (e) => player.setVolume(parseFloat(e.target.value)));
 
-  // Quick actions
   document.querySelectorAll('[data-action]').forEach(btn => {
     btn.addEventListener('click', () => handleQuickAction(btn.dataset.action));
   });
 
-  // Show current redirect URI in settings
   if (settingsRedirect) {
     settingsRedirect.textContent = window.location.origin + '/callback';
   }
 
-  // Handle OAuth callback
+  // OAuth callback
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   if (code) {
@@ -98,6 +107,7 @@ async function init() {
     } catch (err) {
       addMessage('agent', `Login error: ${err.message}`);
       setLoggedOutUI();
+      showMissingKeyWarning();
     }
     return;
   }
@@ -106,6 +116,10 @@ async function init() {
     await onAuthenticated();
   } else {
     setLoggedOutUI();
+    if (!hasValidClientId()) {
+      const err = getConfigError();
+      if (err) addMessage('agent', `⚠️ ${err.message}`);
+    }
   }
 }
 
@@ -132,8 +146,6 @@ async function onAuthenticated() {
     localStorage.setItem('spotify_user', JSON.stringify(currentUser));
 
     setLoggedInUI(productInfo);
-
-    // Wire professional UI helpers + connector status
     updateDevModeBadge(isPremium);
     handlePremiumBanner(isPremium);
     updateSpotifyConnectorStatus(true, isPremium);
@@ -163,13 +175,11 @@ async function onAuthenticated() {
 
     await refreshDevices();
 
-    // Start real-time polling for Now Playing + Devices
     startPolling({
       fetchPlayback: () => api.getPlaybackState(),
       onPlayback: (state) => updateNowPlayingFromApi(state),
       onDevices: () => refreshDevices()
     });
-
   } catch (err) {
     console.error(err);
     addMessage('agent', `Error: ${err.message}`);
@@ -221,7 +231,6 @@ function setLoggedOutUI() {
   }
   if (settingsSdk) settingsSdk.textContent = 'Off';
 
-  // Reset professional UI helpers + connectors + polling
   updateDevModeBadge(false);
   handlePremiumBanner(false);
   updateSpotifyConnectorStatus(false, false);
@@ -234,7 +243,6 @@ async function refreshDevices() {
     devices = data.devices || [];
     renderDevices();
 
-    // Update active device card
     const active = devices.find(d => d.is_active);
     if (active) {
       if (activeDeviceName) activeDeviceName.textContent = active.name;
@@ -301,7 +309,6 @@ async function handleQuickAction(action) {
   const cmd = map[action];
   if (!cmd) return;
 
-  // Switch to agent view for chat commands
   if (['play-top', 'recent', 'list-devices', 'help'].includes(action)) {
     switchView('agent');
   }
