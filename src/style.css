@@ -105,7 +105,8 @@ body {
   margin-top: 2px;
 }
 
-.plan-badge.premium { background: rgba(29,185,84,0.2); color: var(--primary); }
+.plan-badge.premium { background: rgba(29,185,84,0.25); color: #1ed760; font-weight: 700; }
+.plan-badge.free { background: rgba(255,180,0,0.15); color: #ffb400; }
 
 .content {
   margin-left: var(--sidebar-w);
@@ -168,20 +169,83 @@ body {
 
 .panel-header h3, .card h3 { font-size: 1rem; font-weight: 600; }
 
+/* ========== Premium Conversion Banner (Enhanced) ========== */
 .premium-banner {
-  background: linear-gradient(135deg, #1a1a1a, #2a1a00);
-  border: 1px solid #3d2a00;
+  background: linear-gradient(135deg, #1a1200 0%, #2a1f00 50%, #1a1a1a 100%);
+  border: 1px solid #4a3a00;
   border-radius: var(--radius);
-  padding: 16px 20px;
-  display: flex;
+  padding: 20px 24px;
+  display: none;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(29, 185, 84, 0.08);
 }
 
-.premium-banner.hidden { display: none; }
-.premium-banner p { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+.premium-banner.visible {
+  display: flex;
+}
+
+.premium-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+}
+
+.premium-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.premium-banner strong {
+  font-size: 1.05rem;
+  color: #1ed760;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.premium-banner p {
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.premium-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.premium-actions .btn-primary {
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(29, 185, 84, 0.35);
+}
+
+.premium-actions .btn-ghost {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .premium-banner {
+    flex-direction: column;
+    text-align: center;
+  }
+  .premium-content {
+    flex-direction: column;
+    align-items: center;
+  }
+  .premium-actions {
+    width: 100%;
+  }
+  .premium-actions .btn {
+    width: 100%;
+  }
+}
 
 .track-info {
   display: flex;
