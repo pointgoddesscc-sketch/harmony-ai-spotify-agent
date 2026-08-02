@@ -1,0 +1,90 @@
+name: Harmony Grok Agent – Scheduled Automation
+
+on:
+  schedule:
+    # Runs every day at 08:00 UTC (adjust as needed)
+    - cron: '0 8 * * *'
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
+    inputs:
+      command:
+        description: 'Natural language command for the Grok agent'
+        required: false
+        default: 'list devices'
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create .env from secrets
+        env:
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          SPOTIFY_REDIRECT_URI: ${{ secrets.SPOTIFY_REDIRECT_URI }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          XAI_MODEL: ${{ secrets.XAI_MODEL }}
+        run: |
+          echo "SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID" >> .env
+          echo "SPOTIFY_CLIENT_SECRET=$SPOTIFY_CLIENT_SECRET" >> .env
+          echo "SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://localhost:8080}" >> .env
+          echo "XAI_API_KEY=$XAI_API_KEY" >> .env
+          echo "XAI_MODEL=${XAI_MODEL:-grok-3}" >> .env
+          # Note: First run may require manual token cache setup.
+          # For fully headless scheduled runs, pre-generate .spotify_token_cache
+          # and store it as a secret or artifact.
+
+      - name: Run Grok Agent (one-shot command)
+        env:
+          # Pass the command from workflow_dispatch or default
+          HARMONY_COMMAND: ${{ github.event.inputs.command || 'list devices' }}
+        run: |
+          python -c '
+          import os
+          import sys
+          sys.path.insert(0, ".")
+          from spotify_agent import create_spotify_client, create_grok_client, process_with_grok, fallback_keyword
+
+          sp = create_spotify_client()
+          if not sp:
+              print("Failed to connect to Spotify. Check secrets and token cache.")
+              sys.exit(1)
+
+          grok = create_grok_client()
+          command = os.getenv("HARMONY_COMMAND", "list devices")
+          print(f"Executing command: {command}")
+
+          if grok:
+              reply = process_with_grok(command, grok, sp)
+          else:
+              reply = fallback_keyword(command, sp)
+
+          print("\\n=== AGENT REPLY ===")
+          print(reply)
+          print("===================")
+          '
+
+      - name: Upload logs (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harmony-agent-logs
+          path: backend/
+          retention-days: 5
