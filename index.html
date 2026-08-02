@@ -3,31 +3,53 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Harmony AI – Spotify Music Agent Dashboard</title>
-  <meta name="description" content="Your personal AI music agent that works with Spotify Web, Desktop and iPhone via Connect." />
+  <title>Harmony AI – Spotify Music Agent | OrgSuite</title>
+  <meta name="description" content="Professional AI music agent for Spotify Web, Desktop and iPhone via Connect. Powered by OrgSuite." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <div id="app">
     <aside class="sidebar">
       <div class="sidebar-logo">
-        <span class="logo-icon">🎵</span>
-        <span class="logo-text">Harmony AI</span>
+        <div class="logo-mark">🎵</div>
+        <div>
+          <div class="logo-text">Harmony AI</div>
+          <div class="logo-sub">OrgSuite Edition</div>
+        </div>
       </div>
+
       <nav class="sidebar-nav">
-        <button class="nav-item active" data-view="dashboard"><span class="nav-icon">🏠</span> Dashboard</button>
-        <button class="nav-item" data-view="devices"><span class="nav-icon">📱</span> Devices</button>
-        <button class="nav-item" data-view="agent"><span class="nav-icon">💬</span> AI Agent</button>
-        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙️</span> Settings</button>
+        <button class="nav-item active" data-view="dashboard">
+          <span class="nav-icon">⌂</span> Dashboard
+        </button>
+        <button class="nav-item" data-view="devices">
+          <span class="nav-icon">📱</span> Devices
+        </button>
+        <button class="nav-item" data-view="agent">
+          <span class="nav-icon">💬</span> AI Agent
+        </button>
+        <button class="nav-item" data-view="settings">
+          <span class="nav-icon">⚙</span> Settings
+        </button>
       </nav>
+
       <div class="sidebar-footer">
+        <div class="dev-mode-badge" id="dev-mode-badge">
+          <span class="dot"></span>
+          <span id="dev-mode-text">Developer Mode • Free</span>
+        </div>
+
         <div id="user-chip" class="user-chip hidden">
           <div class="user-avatar">O</div>
           <div class="user-meta">
             <span id="user-name">Org Suite</span>
-            <span id="user-plan" class="plan-badge">Free</span>
+            <span id="user-plan" class="plan-badge free">Free</span>
           </div>
         </div>
+
         <button id="btn-login" class="btn btn-primary btn-block">Connect Spotify</button>
         <button id="btn-logout" class="btn btn-ghost btn-block hidden">Disconnect</button>
       </div>
@@ -43,11 +65,19 @@
 
       <section id="view-dashboard" class="view active">
         <div class="premium-banner" id="premium-banner">
-          <div>
-            <strong>Spotify Free detected</strong>
-            <p>Upgrade to Premium to unlock full playback control, transfer to iPhone, and the Web Playback SDK.</p>
+          <div class="premium-content">
+            <div class="premium-icon">🎧</div>
+            <div>
+              <strong>Unlock Full Harmony Control</strong>
+              <p>Your account is currently on Spotify Free. Upgrade to Premium to enable Web Playback SDK, seamless iPhone transfer, and complete AI agent power.</p>
+            </div>
           </div>
-          <a href="https://www.spotify.com/premium/" target="_blank" class="btn btn-primary">Get Premium</a>
+          <div class="premium-actions">
+            <a href="https://www.spotify.com/premium/" target="_blank" rel="noopener" class="btn btn-primary" id="btn-upgrade-premium">
+              Upgrade to Premium
+            </a>
+            <button class="btn btn-ghost" id="btn-premium-later">Maybe later</button>
+          </div>
         </div>
 
         <div class="grid-2">
@@ -74,7 +104,7 @@
           <div class="card">
             <div class="panel-header">
               <h3>Active Device</h3>
-              <button id="btn-refresh-devices" class="btn btn-sm">Refresh</button>
+              <button id="btn-refresh-devices" class="btn btn-sm btn-secondary">Refresh</button>
             </div>
             <div id="active-device" class="active-device">
               <div class="device-icon">🎧</div>
@@ -91,7 +121,7 @@
           </div>
         </div>
 
-        <div class="card" style="margin-top:16px">
+        <div class="card" style="margin-top:18px">
           <h3>Quick Actions</h3>
           <div class="action-grid">
             <button class="btn btn-secondary" data-action="play-top">My Top Tracks</button>
@@ -106,14 +136,14 @@
         <div class="card">
           <div class="panel-header">
             <h3>Spotify Connect Devices</h3>
-            <button id="btn-refresh-devices-2" class="btn btn-sm">Refresh</button>
+            <button id="btn-refresh-devices-2" class="btn btn-sm btn-secondary">Refresh</button>
           </div>
-          <p class="muted" style="margin-bottom:12px">Tap a device to transfer playback. Premium required for transfer.</p>
+          <p class="muted" style="margin-bottom:14px">Tap a device to transfer playback. Premium required for transfer.</p>
           <ul id="device-list" class="device-list">
             <li class="muted">Connect Spotify to see devices</li>
           </ul>
         </div>
-        <div class="card" style="margin-top:16px">
+        <div class="card" style="margin-top:18px">
           <h3>How it works</h3>
           <ul class="info-list">
             <li>Your iPhone appears as type <strong>Smartphone</strong></li>
@@ -130,7 +160,7 @@
           <div id="chat-messages" class="chat-messages">
             <div class="message agent">
               <div class="bubble">
-                Hello! I'm Harmony, your Spotify AI agent.<br>
+                Hello! I'm Harmony, your Spotify AI agent.<br><br>
                 Try: “Play some chill lo-fi”, “Transfer to iPhone 17 Pro”, “list devices”, or “play on my phone”.
               </div>
             </div>
@@ -150,18 +180,18 @@
               <strong>Spotify Account</strong>
               <p class="muted" id="settings-account">Not connected</p>
             </div>
-            <span id="settings-plan" class="plan-badge">Free</span>
+            <span id="settings-plan" class="plan-badge free">Free</span>
           </div>
           <div class="settings-row">
             <div>
               <strong>Web Playback SDK</strong>
               <p class="muted">Turns this browser into a Connect device</p>
             </div>
-            <span id="settings-sdk" class="badge">Off</span>
+            <span id="settings-sdk" class="plan-badge">Off</span>
           </div>
         </div>
 
-        <div class="card" style="margin-top:16px">
+        <div class="card" style="margin-top:18px">
           <h3>Agent Preferences</h3>
           <div class="settings-row">
             <div>
@@ -185,7 +215,7 @@
           </div>
         </div>
 
-        <div class="card" style="margin-top:16px">
+        <div class="card" style="margin-top:18px">
           <h3>Developer</h3>
           <div class="settings-row">
             <div>
@@ -202,15 +232,15 @@
           <div class="settings-row">
             <div>
               <strong>GitHub Repo</strong>
-              <p class="muted"><a href="https://github.com/pointgoddesscc-sketch/harmony-ai-spotify-agent" target="_blank" style="color:#1DB954">harmony-ai-spotify-agent</a></p>
+              <p class="muted"><a href="https://github.com/pointgoddesscc-sketch/harmony-ai-spotify-agent" target="_blank">harmony-ai-spotify-agent</a></p>
             </div>
           </div>
         </div>
 
-        <div class="card" style="margin-top:16px">
+        <div class="card" style="margin-top:18px">
           <h3>About</h3>
           <p class="muted">Harmony AI – Vanilla JS + Vite + PKCE + Web Playback SDK + Spotify Connect</p>
-          <p class="muted" style="margin-top:8px">Built for modern website development & marketing teams.</p>
+          <p class="muted" style="margin-top:8px">Built for modern website development & marketing teams. OrgSuite Edition.</p>
         </div>
       </section>
     </div>
