@@ -1,19 +1,16 @@
 /**
- * Harmony AI – Real-time Chat Edge Function
- * -----------------------------------------
- * Vercel Edge Runtime for low-latency chat responses.
+ * Harmony AI – Real-time Chat Edge Function (Cache Optimized)
+ * ------------------------------------------------------------
+ * Vercel Edge Runtime with smart caching:
+ * - Generic replies (help, greetings) → short CDN/edge cache
+ * - Personalized / Grok replies → no-store
+ *
  * Path: /api/chat
  *
- * Optional env:
- *   XAI_API_KEY  – if set, uses Grok for smarter replies
- *   HARMONY_SYSTEM_PROMPT – override system personality
- *
- * Request:
- *   POST /api/chat
- *   { "message": "what’s playing?", "context": { "user": "...", "devices": [] } }
- *
- * Response:
- *   { "reply": "...", "source": "edge" | "grok" }
+ * Env:
+ *   XAI_API_KEY           – enables Grok
+ *   HARMONY_SYSTEM_PROMPT – optional personality override
+ *   CHAT_CACHE_TTL        – seconds for generic cache (default 60)
  */
 
 export const config = {
@@ -25,17 +22,17 @@ You help users control music, transfer playback between devices, and answer ques
 Keep replies short, natural, and helpful. Never invent track data you do not have.
 If the user asks about Premium features and they are Free, gently remind them.`;
 
+// In-memory edge cache for generic replies (survives warm isolates briefly)
+const memoryCache = new Map();
+const DEFAULT_TTL_MS = 60_000; // 60 seconds
+
 export default async function handler(req) {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders(),
-    });
+    return new Response(null, { status: 204, headers: corsHeaders() });
   }
 
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405);
+    return json({ error: 'Method not allowed' }, 405, 'no-store');
   }
 
   try {
@@ -44,25 +41,75 @@ export default async function handler(req) {
     const context = body.context || {};
 
     if (!message) {
-      return json({ reply: 'Say something like “what’s playing” or “play some lo-fi”.', source: 'edge' });
+      return json(
+        { reply: 'Say something like “what’s playing” or “play some lo-fi”.', source: 'edge' },
+        200,
+        'public, max-age=30, s-maxage=60'
+      );
     }
 
-    // Prefer Grok when key is present
+    const isPersonalized = !!(context.user || context.devices?.length || context.isPremium != null);
+    const cacheKey = !isPersonalized ? normalizeKey(message) : null;
+
+    // 1) Memory cache hit (generic only)
+    if (cacheKey) {
+      const hit = memoryCache.get(cacheKey);
+      if (hit && Date.now() < hit.expires) {
+        return json(
+          { reply: hit.reply, source: hit.source, cached: true },
+          200,
+          cacheControlHeader(true)
+        );
+      }
+    }
+
+    // 2) Prefer Grok when key is present (never cache Grok output)
     const xaiKey = process.env.XAI_API_KEY;
     if (xaiKey) {
       const grokReply = await callGrok(xaiKey, message, context);
       if (grokReply) {
-        return json({ reply: grokReply, source: 'grok' });
+        return json({ reply: grokReply, source: 'grok', cached: false }, 200, 'no-store');
       }
     }
 
-    // Fast local edge fallback (no external call)
+    // 3) Local edge reply
     const reply = localEdgeReply(message, context);
-    return json({ reply, source: 'edge' });
+    const source = 'edge';
+
+    // Store generic replies in memory cache
+    if (cacheKey) {
+      const ttl = Number(process.env.CHAT_CACHE_TTL || 60) * 1000;
+      memoryCache.set(cacheKey, {
+        reply,
+        source,
+        expires: Date.now() + (ttl || DEFAULT_TTL_MS),
+      });
+      // Prevent unbounded growth
+      if (memoryCache.size > 200) {
+        const firstKey = memoryCache.keys().next().value;
+        memoryCache.delete(firstKey);
+      }
+    }
+
+    return json(
+      { reply, source, cached: false },
+      200,
+      isPersonalized ? 'no-store' : cacheControlHeader(false)
+    );
   } catch (err) {
     console.error('[Harmony Chat Edge]', err);
-    return json({ error: 'Chat failed', detail: err.message }, 500);
+    return json({ error: 'Chat failed', detail: err.message }, 500, 'no-store');
   }
+}
+
+function normalizeKey(msg) {
+  return msg.toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 120);
+}
+
+function cacheControlHeader(fromCache) {
+  // Short CDN cache for generic replies; allow stale-while-revalidate
+  const ttl = Number(process.env.CHAT_CACHE_TTL || 60);
+  return `public, max-age=${Math.min(ttl, 30)}, s-maxage=${ttl}, stale-while-revalidate=120`;
 }
 
 function corsHeaders() {
@@ -73,17 +120,19 @@ function corsHeaders() {
   };
 }
 
-function json(data, status = 200) {
+function json(data, status = 200, cacheControl = 'no-store') {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': cacheControl,
+      'CDN-Cache-Control': cacheControl.startsWith('public') ? cacheControl : 'no-store',
+      'Vercel-CDN-Cache-Control': cacheControl.startsWith('public') ? cacheControl : 'no-store',
       ...corsHeaders(),
     },
   });
 }
 
-/** Lightweight rule-based replies that run entirely on the Edge */
 function localEdgeReply(msg, context) {
   const m = msg.toLowerCase();
   const name = context.user?.display_name?.split(' ')[0] || 'friend';
@@ -108,7 +157,6 @@ function localEdgeReply(msg, context) {
   return `Got it, ${name}. Try “list devices”, “my top tracks”, or “play some chill lo-fi” once Spotify is connected.`;
 }
 
-/** Optional Grok (xAI) call for smarter real-time chat */
 async function callGrok(apiKey, message, context) {
   try {
     const system = process.env.HARMONY_SYSTEM_PROMPT || DEFAULT_SYSTEM;
