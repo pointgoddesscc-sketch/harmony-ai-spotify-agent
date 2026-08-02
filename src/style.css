@@ -1,33 +1,47 @@
 /* ============================================================
-   Harmony AI – Beautiful Modern Dashboard
-   Soft • Elegant • Original (inspired by clean AI UIs, unique design)
+   Harmony AI – Refined Color Palette
+   Soft • Balanced • High-contrast • Original
    OrgSuite Edition
    ============================================================ */
 
 :root {
-  --bg: #0c0c0e;
-  --surface: #141416;
-  --surface-2: #1c1c1f;
-  --surface-3: #252528;
-  --border: #2a2a2e;
-  --border-light: #333338;
-  --text: #f4f4f5;
+  /* Backgrounds – deeper and cleaner */
+  --bg: #09090b;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --surface-3: #222226;
+  
+  /* Borders */
+  --border: #27272a;
+  --border-light: #3f3f46;
+  
+  /* Text */
+  --text: #fafafa;
   --text-secondary: #a1a1aa;
   --muted: #71717a;
-  --primary: #22c55e;
-  --primary-hover: #4ade80;
-  --primary-soft: rgba(34, 197, 94, 0.12);
+  
+  /* Primary – refined Spotify-inspired green */
+  --primary: #1ed760;
+  --primary-hover: #2ee66f;
+  --primary-soft: rgba(30, 215, 96, 0.14);
+  --primary-glow: rgba(30, 215, 96, 0.35);
+  
+  /* Accent – soft violet for secondary actions */
   --accent: #a78bfa;
   --accent-soft: rgba(167, 139, 250, 0.12);
+  
+  /* Warning / Free plan */
   --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.12);
+  --warning-soft: rgba(251, 191, 36, 0.13);
+  
+  /* Layout */
   --sidebar-w: 272px;
   --radius: 16px;
   --radius-sm: 12px;
   --radius-full: 9999px;
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.2);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 14px rgba(0, 0, 0, 0.22);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -46,7 +60,7 @@ body {
 /* ========== SIDEBAR ========== */
 .sidebar {
   width: var(--sidebar-w);
-  background: linear-gradient(180deg, #0e0e10 0%, #0a0a0c 100%);
+  background: linear-gradient(180deg, #0c0c0e 0%, #09090b 100%);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -65,13 +79,13 @@ body {
 
 .logo-mark {
   width: 40px; height: 40px;
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  background: linear-gradient(145deg, #1ed760 0%, #14b84a 100%);
   border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35);
+  box-shadow: 0 6px 22px var(--primary-glow);
 }
 
 .logo-text {
@@ -143,7 +157,7 @@ body {
 .user-avatar {
   width: 40px; height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #22c55e, #15803d);
+  background: linear-gradient(145deg, #1ed760, #128a3a);
   color: #000;
   display: flex;
   align-items: center;
@@ -193,12 +207,12 @@ body {
   width: 8px; height: 8px;
   border-radius: 50%;
   background: var(--warning);
-  box-shadow: 0 0 8px var(--warning);
+  box-shadow: 0 0 10px var(--warning);
 }
 
 .dev-mode-badge.premium .dot {
   background: var(--primary);
-  box-shadow: 0 0 8px var(--primary);
+  box-shadow: 0 0 10px var(--primary);
 }
 
 /* ========== CONTENT ========== */
@@ -235,7 +249,7 @@ body {
 .status.online {
   background: var(--primary-soft);
   color: var(--primary);
-  border-color: rgba(34, 197, 94, 0.25);
+  border-color: rgba(30, 215, 96, 0.28);
 }
 
 .view { display: none; }
@@ -287,8 +301,8 @@ body {
 
 /* ========== PREMIUM BANNER ========== */
 .premium-banner {
-  background: linear-gradient(135deg, #12120a 0%, #1a180c 45%, #0f0f0f 100%);
-  border: 1px solid #3d3500;
+  background: linear-gradient(135deg, #0f0f0a 0%, #16140c 45%, #0c0c0a 100%);
+  border: 1px solid #3a3200;
   border-radius: var(--radius);
   padding: 24px 28px;
   display: none;
@@ -296,7 +310,7 @@ body {
   align-items: center;
   gap: 24px;
   margin-bottom: 28px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
   position: relative;
   overflow: hidden;
 }
@@ -306,7 +320,7 @@ body {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.4), transparent);
+  background: linear-gradient(90deg, transparent, rgba(30, 215, 96, 0.45), transparent);
 }
 
 .premium-banner.visible {
@@ -322,14 +336,14 @@ body {
 
 .premium-icon {
   width: 48px; height: 48px;
-  background: linear-gradient(135deg, #22c55e, #16a34a);
+  background: linear-gradient(145deg, #1ed760, #14b84a);
   border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.35rem;
   flex-shrink: 0;
-  box-shadow: 0 6px 18px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 6px 20px var(--primary-glow);
 }
 
 .premium-banner strong {
@@ -358,7 +372,7 @@ body {
 .premium-actions .btn-primary {
   white-space: nowrap;
   padding: 13px 24px;
-  box-shadow: 0 8px 24px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 8px 26px var(--primary-glow);
   font-weight: 700;
 }
 
@@ -424,7 +438,7 @@ body {
 .btn-play {
   background: var(--primary);
   color: #000;
-  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 6px 22px var(--primary-glow);
 }
 .btn-play:hover { background: var(--primary-hover); transform: scale(1.08); }
 
@@ -473,7 +487,7 @@ body {
 .device-list li:hover { background: var(--surface-2); }
 .device-list li.active {
   background: var(--primary-soft);
-  border-color: rgba(34, 197, 94, 0.3);
+  border-color: rgba(30, 215, 96, 0.3);
   color: var(--primary);
 }
 
@@ -495,7 +509,7 @@ body {
   min-height: 400px;
   max-height: 520px;
   overflow-y: auto;
-  background: #0a0a0c;
+  background: #09090b;
   border-radius: var(--radius-sm);
   padding: 20px;
   display: flex;
@@ -533,7 +547,7 @@ body {
 
 .chat-form input {
   flex: 1;
-  background: #0a0a0c;
+  background: #09090b;
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
   padding: 14px 22px;
@@ -545,7 +559,7 @@ body {
 
 .chat-form input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+  box-shadow: 0 0 0 3px rgba(30, 215, 96, 0.18);
 }
 .chat-form input:disabled { opacity: 0.4; }
 
@@ -617,7 +631,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 .btn-primary:hover {
   background: var(--primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 8px 22px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 8px 24px var(--primary-glow);
 }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
 
