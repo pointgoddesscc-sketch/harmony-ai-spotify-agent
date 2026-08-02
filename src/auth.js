@@ -1,13 +1,14 @@
 /**
  * Harmony AI – Spotify Authentication Module
- * Uses Authorization Code Flow with PKCE (recommended by Spotify for client-side apps)
- * Documentation: https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow
+ * Uses Authorization Code Flow with PKCE
+ * Includes clear error handling for missing Client ID
  */
 
-const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || 'YOUR_CLIENT_ID_HERE';
+const CLIENT_ID = (import.meta.env.VITE_SPOTIFY_CLIENT_ID || '').trim();
+const PLACEHOLDER_IDS = new Set(['', 'YOUR_CLIENT_ID_HERE', 'your_client_id_here', 'undefined', 'null']);
 
 // Automatically use current origin in production (Vercel) or local for development
-const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI 
+const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI
   || (typeof window !== 'undefined' ? `${window.location.origin}/callback` : 'http://127.0.0.1:5173/callback');
 
 const SCOPES = [
@@ -24,6 +25,29 @@ const SCOPES = [
   'user-top-read',
   'user-read-recently-played'
 ].join(' ');
+
+/**
+ * Returns true when a real Spotify Client ID is configured
+ */
+export function hasValidClientId() {
+  return Boolean(CLIENT_ID) && !PLACEHOLDER_IDS.has(CLIENT_ID);
+}
+
+/**
+ * Human-readable config error for missing key
+ */
+export function getConfigError() {
+  if (hasValidClientId()) return null;
+  return {
+    code: 'MISSING_SPOTIFY_CLIENT_ID',
+    title: 'Spotify Client ID not configured',
+    message:
+      'VITE_SPOTIFY_CLIENT_ID is missing. ' +
+      'Add it in Vercel → Project Settings → Environment Variables, then redeploy. ' +
+      'Also add this Redirect URI in the Spotify Dashboard: ' + REDIRECT_URI,
+    redirectUri: REDIRECT_URI
+  };
+}
 
 function generateRandomString(length) {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -42,6 +66,15 @@ async function generateCodeChallenge(codeVerifier) {
 }
 
 export async function login() {
+  const configError = getConfigError();
+  if (configError) {
+    // Surface a clear error instead of redirecting to Spotify with an invalid client_id
+    const err = new Error(configError.message);
+    err.code = configError.code;
+    err.meta = configError;
+    throw err;
+  }
+
   const verifier = generateRandomString(64);
   const challenge = await generateCodeChallenge(verifier);
   localStorage.setItem('spotify_code_verifier', verifier);
@@ -60,6 +93,10 @@ export async function login() {
 }
 
 export async function exchangeCodeForToken(code) {
+  if (!hasValidClientId()) {
+    throw new Error(getConfigError().message);
+  }
+
   const verifier = localStorage.getItem('spotify_code_verifier');
   if (!verifier) throw new Error('Missing code_verifier. Please login again.');
 
@@ -76,8 +113,14 @@ export async function exchangeCodeForToken(code) {
   });
 
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error_description || 'Token exchange failed');
+    const err = await response.json().catch(() => ({}));
+    const detail = err.error_description || err.error || 'Token exchange failed';
+    if (String(detail).toLowerCase().includes('invalid client')) {
+      throw new Error(
+        'Invalid Spotify Client ID. Check VITE_SPOTIFY_CLIENT_ID in Vercel Environment Variables and redeploy.'
+      );
+    }
+    throw new Error(detail);
   }
 
   const data = await response.json();
@@ -86,6 +129,11 @@ export async function exchangeCodeForToken(code) {
 }
 
 export async function refreshAccessToken() {
+  if (!hasValidClientId()) {
+    logout();
+    throw new Error(getConfigError().message);
+  }
+
   const refreshToken = localStorage.getItem('spotify_refresh_token');
   if (!refreshToken) throw new Error('No refresh token available');
 
@@ -148,5 +196,9 @@ export function isLoggedIn() {
 }
 
 export function getClientId() {
-  return CLIENT_ID;
+  return hasValidClientId() ? CLIENT_ID : null;
+}
+
+export function getRedirectUri() {
+  return REDIRECT_URI;
 }
