@@ -2,7 +2,7 @@
  * Harmony AI – Main Application Entry (Production Ready)
  * Orchestrates Auth, Web Playback SDK, Device Management, Chat UI & Agent.
  * Fully synced with the current dashboard index.html
- * OrgSuite Edition – Premium UI helpers wired
+ * OrgSuite Edition – Premium UI + Connector Status Monitoring
  */
 
 import { login, logout, isLoggedIn, exchangeCodeForToken } from './auth.js';
@@ -10,6 +10,7 @@ import * as api from './spotify-api.js';
 import * as player from './player.js';
 import { processMessage } from './agent.js';
 import { updateDevModeBadge, handlePremiumBanner } from './premium-ui.js';
+import { renderConnectors, updateSpotifyConnectorStatus } from './connectors.js';
 
 // ── DOM references (matched to current index.html) ──────────────────
 const btnLogin = document.getElementById('btn-login');
@@ -49,6 +50,9 @@ let isPremium = false;
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
+  // Render connector status immediately
+  renderConnectors();
+
   // Navigation
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -127,9 +131,10 @@ async function onAuthenticated() {
 
     setLoggedInUI(productInfo);
 
-    // Wire the new professional UI helpers
+    // Wire professional UI helpers + connector status
     updateDevModeBadge(isPremium);
     handlePremiumBanner(isPremium);
+    updateSpotifyConnectorStatus(true, isPremium);
 
     if (!isPremium) {
       addMessage('agent', `Welcome, ${productInfo.display_name}!\n\n⚠️ Your account is on Spotify Free.\n\nFull playback control, transfer to iPhone, and the Web Playback device require Spotify Premium.\n\nYou can still:\n• Search tracks\n• View your library & top tracks\n• List available devices\n\nUpgrade to Premium to unlock the complete Harmony AI agent.`);
@@ -210,9 +215,10 @@ function setLoggedOutUI() {
   }
   if (settingsSdk) settingsSdk.textContent = 'Off';
 
-  // Reset professional UI helpers
+  // Reset professional UI helpers + connectors
   updateDevModeBadge(false);
   handlePremiumBanner(false);
+  updateSpotifyConnectorStatus(false, false);
 }
 
 async function refreshDevices() {
