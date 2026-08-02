@@ -2,12 +2,14 @@
  * Harmony AI – Main Application Entry (Production Ready)
  * Orchestrates Auth, Web Playback SDK, Device Management, Chat UI & Agent.
  * Fully synced with the current dashboard index.html
+ * OrgSuite Edition – Premium UI helpers wired
  */
 
 import { login, logout, isLoggedIn, exchangeCodeForToken } from './auth.js';
 import * as api from './spotify-api.js';
 import * as player from './player.js';
 import { processMessage } from './agent.js';
+import { updateDevModeBadge, handlePremiumBanner } from './premium-ui.js';
 
 // ── DOM references (matched to current index.html) ──────────────────
 const btnLogin = document.getElementById('btn-login');
@@ -30,7 +32,6 @@ const btnPlay = document.getElementById('btn-play');
 const btnPrev = document.getElementById('btn-prev');
 const btnNext = document.getElementById('btn-next');
 const volumeSlider = document.getElementById('volume');
-const premiumBanner = document.getElementById('premium-banner');
 const settingsAccount = document.getElementById('settings-account');
 const settingsPlan = document.getElementById('settings-plan');
 const settingsSdk = document.getElementById('settings-sdk');
@@ -126,16 +127,18 @@ async function onAuthenticated() {
 
     setLoggedInUI(productInfo);
 
+    // Wire the new professional UI helpers
+    updateDevModeBadge(isPremium);
+    handlePremiumBanner(isPremium);
+
     if (!isPremium) {
       addMessage('agent', `Welcome, ${productInfo.display_name}!\n\n⚠️ Your account is on Spotify Free.\n\nFull playback control, transfer to iPhone, and the Web Playback device require Spotify Premium.\n\nYou can still:\n• Search tracks\n• View your library & top tracks\n• List available devices\n\nUpgrade to Premium to unlock the complete Harmony AI agent.`);
       if (agentStatus) {
         agentStatus.textContent = 'Free plan';
         agentStatus.classList.remove('online');
       }
-      if (premiumBanner) premiumBanner.style.display = 'flex';
     } else {
       addMessage('agent', `Welcome back, ${productInfo.display_name}! Premium detected. I'm ready to control your Spotify and transfer to iPhone.`);
-      if (premiumBanner) premiumBanner.style.display = 'none';
 
       await player.initPlayer(
         (deviceId) => {
@@ -179,6 +182,7 @@ function setLoggedInUI(productInfo) {
   if (settingsAccount) settingsAccount.textContent = productInfo?.display_name || currentUser?.display_name || 'Connected';
   if (settingsPlan) {
     settingsPlan.textContent = productInfo?.isPremium ? 'Premium' : 'Free';
+    settingsPlan.className = 'plan-badge ' + (productInfo?.isPremium ? 'premium' : 'free');
   }
 
   if (chatInput) chatInput.disabled = false;
@@ -200,9 +204,15 @@ function setLoggedOutUI() {
   if (activeDeviceName) activeDeviceName.textContent = 'No device';
   if (activeDeviceType) activeDeviceType.textContent = 'Connect Spotify to see devices';
   if (settingsAccount) settingsAccount.textContent = 'Not connected';
-  if (settingsPlan) settingsPlan.textContent = 'Free';
+  if (settingsPlan) {
+    settingsPlan.textContent = 'Free';
+    settingsPlan.className = 'plan-badge free';
+  }
   if (settingsSdk) settingsSdk.textContent = 'Off';
-  if (premiumBanner) premiumBanner.style.display = 'none';
+
+  // Reset professional UI helpers
+  updateDevModeBadge(false);
+  handlePremiumBanner(false);
 }
 
 async function refreshDevices() {
