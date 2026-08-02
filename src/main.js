@@ -2,7 +2,7 @@
  * Harmony AI – Main Application Entry (Production Ready)
  * Orchestrates Auth, Web Playback SDK, Device Management, Chat UI & Agent.
  * Fully synced with the current dashboard index.html
- * OrgSuite Edition – Premium UI + Connector Status Monitoring
+ * OrgSuite Edition – Premium UI + Connectors + Real-time Polling
  */
 
 import { login, logout, isLoggedIn, exchangeCodeForToken } from './auth.js';
@@ -11,6 +11,7 @@ import * as player from './player.js';
 import { processMessage } from './agent.js';
 import { updateDevModeBadge, handlePremiumBanner } from './premium-ui.js';
 import { renderConnectors, updateSpotifyConnectorStatus } from './connectors.js';
+import { startPolling, stopPolling } from './polling.js';
 
 // ── DOM references (matched to current index.html) ──────────────────
 const btnLogin = document.getElementById('btn-login');
@@ -62,6 +63,7 @@ async function init() {
   btnLogout?.addEventListener('click', () => {
     logout();
     player.disconnect();
+    stopPolling();
     setLoggedOutUI();
     addMessage('agent', 'Disconnected. Click Connect Spotify to start again.');
   });
@@ -160,10 +162,14 @@ async function onAuthenticated() {
     }
 
     await refreshDevices();
-    try {
-      const state = await api.getPlaybackState();
-      if (state) updateNowPlayingFromApi(state);
-    } catch (_) {}
+
+    // Start real-time polling for Now Playing + Devices
+    startPolling({
+      fetchPlayback: () => api.getPlaybackState(),
+      onPlayback: (state) => updateNowPlayingFromApi(state),
+      onDevices: () => refreshDevices()
+    });
+
   } catch (err) {
     console.error(err);
     addMessage('agent', `Error: ${err.message}`);
@@ -215,10 +221,11 @@ function setLoggedOutUI() {
   }
   if (settingsSdk) settingsSdk.textContent = 'Off';
 
-  // Reset professional UI helpers + connectors
+  // Reset professional UI helpers + connectors + polling
   updateDevModeBadge(false);
   handlePremiumBanner(false);
   updateSpotifyConnectorStatus(false, false);
+  stopPolling();
 }
 
 async function refreshDevices() {
@@ -336,5 +343,8 @@ function updateNowPlayingFromApi(state) {
   if (trackArt && state.item.album?.images?.[0]) {
     trackArt.src = state.item.album.images[0].url;
     trackArt.classList.remove('hidden');
+  }
+  if (btnPlay && typeof state.is_playing === 'boolean') {
+    btnPlay.textContent = state.is_playing ? '⏸' : '▶️';
   }
 }
