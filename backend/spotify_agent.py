@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Harmony AI – Spotify Backend Agent
-==================================
+Harmony AI – Spotify Backend Agent (Grok Automation)
+====================================================
 Production-ready headless agent that combines:
 
 • Spotipy  → authenticates the Org Suite Spotify account
 • xAI API  → uses Grok as the natural-language reasoning engine
+• Optional FastAPI server → remote control from OrgSuite / other AIs
 
 This agent runs independently of the JavaScript + Vite front-end
 that is deployed on Vercel. Clear separation of concerns:
@@ -15,19 +16,34 @@ that is deployed on Vercel. Clear separation of concerns:
 
 Target account:
   Profile  : Org Suite
-  Username : 31f7pokhxg2zwvdtlimynslkb5wy
-  Playlist : Sportify
+  Key playlist : Sportify
+
+Premium is required for playback control and device transfer.
 """
+
+from __future__ import annotations
 
 import os
 import sys
 import json
+import logging
 from typing import Optional, Dict, Any, List
 
 from dotenv import load_dotenv
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from openai import OpenAI
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("harmony")
 
 # ---------------------------------------------------------------------------
 # Environment
@@ -51,21 +67,20 @@ XAI_MODEL   = os.getenv("XAI_MODEL", "grok-3")
 
 CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".spotify_token_cache")
 
-
 # ---------------------------------------------------------------------------
 # xAI (Grok) client
 # ---------------------------------------------------------------------------
 
 def create_grok_client() -> Optional[OpenAI]:
     if not XAI_API_KEY:
-        print("⚠️  XAI_API_KEY not set – natural language understanding disabled.")
+        log.warning("XAI_API_KEY not set – natural language understanding disabled.")
         return None
 
     client = OpenAI(
         api_key=XAI_API_KEY,
         base_url="https://api.x.ai/v1"
     )
-    print(f"✅ xAI client ready (model: {XAI_MODEL})")
+    log.info(f"xAI client ready (model: {XAI_MODEL})")
     return client
 
 
@@ -75,8 +90,7 @@ def create_grok_client() -> Optional[OpenAI]:
 
 def create_spotify_client() -> Optional[spotipy.Spotify]:
     if not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
-        print("❌ Missing Spotify credentials.")
-        print("   Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env")
+        log.error("Missing Spotify credentials. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env")
         return None
 
     try:
@@ -92,20 +106,39 @@ def create_spotify_client() -> Optional[spotipy.Spotify]:
         sp = spotipy.Spotify(auth_manager=auth_manager)
 
         user = sp.current_user()
-        print("✅ Spotify connected")
-        print(f"   Display Name : {user.get('display_name')}")
-        print(f"   User ID      : {user.get('id')}")
-        print(f"   Plan         : {user.get('product', 'free').upper()}")
+        product = (user.get("product") or "free").lower()
+        is_premium = product == "premium"
+
+        log.info("Spotify connected")
+        log.info(f"  Display Name : {user.get('display_name')}")
+        log.info(f"  User ID      : {user.get('id')}")
+        log.info(f"  Plan         : {product.upper()} {'✅' if is_premium else '⚠️  (Premium required for full control)'}")
+
+        if not is_premium:
+            log.warning("Account is on Free plan. Playback control and device transfer will fail until upgraded.")
+
         return sp
 
     except Exception as e:
-        print(f"❌ Spotify authentication failed: {e}")
+        log.error(f"Spotify authentication failed: {e}")
         return None
 
 
 # ---------------------------------------------------------------------------
 # Spotify helpers
 # ---------------------------------------------------------------------------
+
+def get_user_product(sp: spotipy.Spotify) -> Dict[str, Any]:
+    user = sp.current_user()
+    product = (user.get("product") or "free").lower()
+    return {
+        "is_premium": product == "premium",
+        "product": product,
+        "display_name": user.get("display_name") or "User",
+        "id": user.get("id"),
+        "email": user.get("email"),
+    }
+
 
 def find_playlist(sp: spotipy.Spotify, name: str) -> Optional[Dict[str, Any]]:
     name_lower = name.lower().strip()
@@ -121,70 +154,157 @@ def find_playlist(sp: spotipy.Spotify, name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def list_playlists(sp: spotipy.Spotify, limit: int = 15) -> None:
+def list_playlists(sp: spotipy.Spotify, limit: int = 15) -> str:
     results = sp.current_user_playlists(limit=limit)
-    print(f"\n📋 Playlists (top {limit}):")
-    print("-" * 55)
+    lines = [f"📋 Playlists (top {limit}):", "-" * 55]
     for idx, pl in enumerate(results.get("items", []), 1):
         marker = " ★" if pl["name"].lower() == "sportify" else ""
-        print(f"{idx:2}. {pl['name']}{marker}  ({pl['tracks']['total']} tracks)")
-    print("-" * 55)
+        lines.append(f"{idx:2}. {pl['name']}{marker}  ({pl['tracks']['total']} tracks)")
+    lines.append("-" * 55)
+    return "\n".join(lines)
 
 
-def show_profile(sp: spotipy.Spotify) -> None:
-    user = sp.current_user()
-    print("\n👤 Current User")
-    print(f"   Name     : {user.get('display_name')}")
-    print(f"   ID       : {user.get('id')}")
-    print(f"   Email    : {user.get('email', 'N/A')}")
-    print(f"   Country  : {user.get('country', 'N/A')}")
-    print(f"   Plan     : {user.get('product', 'free').upper()}")
-    print(f"   Followers: {user.get('followers', {}).get('total', 0)}")
+def list_devices(sp: spotipy.Spotify) -> str:
+    data = sp.devices()
+    devices = data.get("devices") or []
+    if not devices:
+        return "No active devices found. Open Spotify on a phone or computer."
+    lines = ["Available devices:"]
+    for d in devices:
+        active = " ← active" if d.get("is_active") else ""
+        lines.append(f"• {d['name']} ({d['type']}){active}")
+    return "\n".join(lines)
+
+
+def transfer_to_device(sp: spotipy.Spotify, device_name_hint: str, play: bool = True) -> str:
+    data = sp.devices()
+    devices = data.get("devices") or []
+    if not devices:
+        return "No devices available."
+
+    hint = device_name_hint.lower()
+    target = None
+
+    # Priority matching
+    for d in devices:
+        name = d["name"].lower()
+        if "iphone 17 pro" in name or ("iphone 17" in name and "pro" in hint):
+            target = d
+            break
+    if not target:
+        for d in devices:
+            if hint in d["name"].lower() or (hint in ["phone", "iphone"] and d["type"] == "Smartphone"):
+                target = d
+                break
+    if not target and ("this" in hint or "agent" in hint or "browser" in hint):
+        # Prefer computer type for "this agent"
+        for d in devices:
+            if d["type"] == "Computer":
+                target = d
+                break
+
+    if not target:
+        return f"Could not find a device matching “{device_name_hint}”. Try “list devices” first."
+
+    try:
+        sp.transfer_playback(device_id=target["id"], force_play=play)
+        return f"✅ Transferred playback to “{target['name']}”."
+    except Exception as e:
+        return f"Transfer failed: {e}. Premium is required for device transfer."
+
+
+def show_profile(sp: spotipy.Spotify) -> str:
+    info = get_user_product(sp)
+    return (
+        f"👤 Current User\n"
+        f"   Name     : {info['display_name']}\n"
+        f"   ID       : {info['id']}\n"
+        f"   Email    : {info.get('email', 'N/A')}\n"
+        f"   Plan     : {info['product'].upper()}"
+    )
+
+
+def play_top_tracks(sp: spotipy.Spotify, limit: int = 5) -> str:
+    try:
+        results = sp.current_user_top_tracks(limit=limit, time_range="medium_term")
+        items = results.get("items") or []
+        if not items:
+            return "No top tracks found."
+        uris = [t["uri"] for t in items]
+        sp.start_playback(uris=uris)
+        names = [f"{i+1}. {t['name']} – {t['artists'][0]['name']}" for i, t in enumerate(items)]
+        return "▶️ Playing your top tracks:\n" + "\n".join(names)
+    except Exception as e:
+        return f"Could not start playback: {e}. Premium required."
+
+
+def search_and_play(sp: spotipy.Spotify, query: str) -> str:
+    try:
+        results = sp.search(q=query, type="track", limit=1)
+        tracks = results.get("tracks", {}).get("items") or []
+        if not tracks:
+            return f"No results for “{query}”."
+        track = tracks[0]
+        sp.start_playback(uris=[track["uri"]])
+        return f"▶️ Playing “{track['name']}” by {track['artists'][0]['name']}"
+    except Exception as e:
+        return f"Found track but playback failed: {e}. Premium required."
 
 
 # ---------------------------------------------------------------------------
 # Intent execution
 # ---------------------------------------------------------------------------
 
-def execute_intent(intent: Dict[str, Any], sp: spotipy.Spotify) -> None:
-    action = intent.get("action", "").lower()
+def execute_intent(intent: Dict[str, Any], sp: spotipy.Spotify) -> str:
+    action = (intent.get("action") or "").lower().strip()
 
     if action == "list_playlists":
-        limit = intent.get("limit", 10)
-        list_playlists(sp, limit=limit)
+        limit = int(intent.get("limit", 10))
+        return list_playlists(sp, limit=limit)
 
-    elif action in ("find_sportify", "sportify"):
-        print("\n🔍 Searching for 'Sportify' playlist...")
+    if action in ("find_sportify", "sportify"):
         pl = find_playlist(sp, "Sportify")
         if pl:
-            print(f"✅ Found: {pl['name']}")
-            print(f"   ID   : {pl['id']}")
-            print(f"   Tracks: {pl['tracks']['total']}")
-            print(f"   URL  : {pl['external_urls']['spotify']}")
-        else:
-            print("❌ 'Sportify' playlist not found.")
+            return (
+                f"✅ Found: {pl['name']}\n"
+                f"   ID   : {pl['id']}\n"
+                f"   Tracks: {pl['tracks']['total']}\n"
+                f"   URL  : {pl['external_urls']['spotify']}"
+            )
+        return "❌ 'Sportify' playlist not found."
 
-    elif action in ("profile", "me", "whoami"):
-        show_profile(sp)
+    if action in ("profile", "me", "whoami"):
+        return show_profile(sp)
 
-    elif action == "help":
-        print("""
-Available intents Grok can return:
-  • list_playlists   – show playlists
-  • find_sportify    – locate the Sportify playlist
-  • profile          – show current user info
-  • help             – this message
-""")
+    if action in ("list_devices", "devices"):
+        return list_devices(sp)
 
-    else:
-        print(f"⚠️  Unrecognized action from Grok: {action}")
-        print("   Falling back to simple keyword matching...")
-        if "list" in action or "playlist" in action:
-            list_playlists(sp)
-        elif "sportify" in action:
-            execute_intent({"action": "find_sportify"}, sp)
-        elif "me" in action or "profile" in action:
-            show_profile(sp)
+    if action == "transfer":
+        target = intent.get("target") or intent.get("device") or "iphone"
+        play = intent.get("play", True)
+        return transfer_to_device(sp, str(target), play=bool(play))
+
+    if action == "play_top":
+        return play_top_tracks(sp, limit=int(intent.get("limit", 5)))
+
+    if action == "play":
+        query = intent.get("query") or intent.get("track") or ""
+        if not query:
+            return "Tell me what to play."
+        return search_and_play(sp, query)
+
+    if action == "help":
+        return """Available actions:
+• list_playlists
+• find_sportify
+• profile
+• list_devices
+• transfer  (target: iphone / desktop / device name)
+• play_top
+• play      (query: song or artist)
+• help"""
+
+    return f"Unrecognized action: {action}. Type help for options."
 
 
 # ---------------------------------------------------------------------------
@@ -193,23 +313,30 @@ Available intents Grok can return:
 
 SYSTEM_PROMPT = """
 You are the backend processing agent for Harmony AI Spotify integration.
-Your only job is to convert the user's natural language command into a single valid JSON object.
+Convert the user's natural language command into a single valid JSON object.
+Reply ONLY with valid JSON. No markdown, no extra text.
 
-Allowed actions (respond with exactly one of these):
-1. {"action": "list_playlists", "limit": <integer between 1 and 50>}
+Allowed actions:
+1. {"action": "list_playlists", "limit": <1-50>}
 2. {"action": "find_sportify"}
 3. {"action": "profile"}
-4. {"action": "help"}
+4. {"action": "list_devices"}
+5. {"action": "transfer", "target": "<iphone|desktop|device name>", "play": true}
+6. {"action": "play_top", "limit": <1-10>}
+7. {"action": "play", "query": "<song or artist>"}
+8. {"action": "help"}
 
 Rules:
-- Reply ONLY with a valid JSON object. No extra text, no markdown.
-- If the user asks about playlists in general → list_playlists
-- If the user mentions Sportify / sportify playlist → find_sportify
-- If the user asks who they are / profile / me → profile
-- For anything else → {"action": "help"}
+- Mentions of playlists → list_playlists or find_sportify
+- Mentions of devices / transfer / play on phone → transfer or list_devices
+- "play my top" / top tracks → play_top
+- "play <something>" → play with query
+- Profile / who am I → profile
+- Anything unclear → help
 """
 
-def process_with_grok(user_command: str, grok: OpenAI, sp: spotipy.Spotify) -> None:
+
+def process_with_grok(user_command: str, grok: OpenAI, sp: spotipy.Spotify) -> str:
     try:
         completion = grok.chat.completions.create(
             model=XAI_MODEL,
@@ -218,7 +345,7 @@ def process_with_grok(user_command: str, grok: OpenAI, sp: spotipy.Spotify) -> N
                 {"role": "user", "content": user_command}
             ],
             temperature=0.1,
-            max_tokens=150
+            max_tokens=200
         )
 
         raw = completion.choices[0].message.content.strip()
@@ -226,27 +353,86 @@ def process_with_grok(user_command: str, grok: OpenAI, sp: spotipy.Spotify) -> N
             raw = raw.strip("`").replace("json", "", 1).strip()
 
         intent = json.loads(raw)
-        print(f"🧠 Grok intent → {intent}")
-        execute_intent(intent, sp)
+        log.info(f"Grok intent → {intent}")
+        return execute_intent(intent, sp)
 
     except json.JSONDecodeError:
-        print("❌ Grok did not return valid JSON. Falling back to keyword matching.")
-        fallback_keyword(user_command, sp)
+        log.warning("Grok did not return valid JSON. Falling back.")
+        return fallback_keyword(user_command, sp)
     except Exception as e:
-        print(f"❌ Grok / system error: {e}")
-        fallback_keyword(user_command, sp)
+        log.error(f"Grok error: {e}")
+        return fallback_keyword(user_command, sp)
 
 
-def fallback_keyword(command: str, sp: spotipy.Spotify) -> None:
+def fallback_keyword(command: str, sp: spotipy.Spotify) -> str:
     cmd = command.lower()
-    if any(w in cmd for w in ["list", "playlist", "playlists"]):
-        list_playlists(sp)
-    elif "sportify" in cmd:
-        execute_intent({"action": "find_sportify"}, sp)
-    elif any(w in cmd for w in ["me", "profile", "whoami", "account"]):
-        show_profile(sp)
-    else:
-        print("Type 'help' or ask something like “list my playlists” or “find Sportify”.")
+    if any(w in cmd for w in ["list playlist", "my playlist", "playlists"]):
+        return list_playlists(sp)
+    if "sportify" in cmd:
+        return execute_intent({"action": "find_sportify"}, sp)
+    if any(w in cmd for w in ["device", "devices"]):
+        return list_devices(sp)
+    if any(w in cmd for w in ["transfer", "play on", "switch to"]):
+        target = "iphone" if "phone" in cmd or "iphone" in cmd else "desktop"
+        return transfer_to_device(sp, target)
+    if "top" in cmd and ("track" in cmd or "song" in cmd):
+        return play_top_tracks(sp)
+    if cmd.startswith("play "):
+        return search_and_play(sp, cmd[5:].strip())
+    if any(w in cmd for w in ["me", "profile", "whoami", "account"]):
+        return show_profile(sp)
+    return "Type 'help' or try: list devices, transfer to iPhone, play my top tracks, find Sportify."
+
+
+# ---------------------------------------------------------------------------
+# FastAPI remote control (optional)
+# ---------------------------------------------------------------------------
+
+def create_api(sp: spotipy.Spotify, grok: Optional[OpenAI]):
+    try:
+        from fastapi import FastAPI, HTTPException
+        from pydantic import BaseModel
+    except ImportError:
+        log.warning("FastAPI not installed – remote API disabled. Run: pip install fastapi uvicorn")
+        return None
+
+    app = FastAPI(
+        title="Harmony AI Spotify Agent",
+        description="Grok-powered backend automation for OrgSuite",
+        version="1.1.0"
+    )
+
+    class CommandRequest(BaseModel):
+        command: str
+
+    @app.get("/health")
+    def health():
+        info = get_user_product(sp)
+        return {
+            "status": "ok",
+            "premium": info["is_premium"],
+            "user": info["display_name"]
+        }
+
+    @app.post("/command")
+    def run_command(req: CommandRequest):
+        if not req.command.strip():
+            raise HTTPException(400, "Empty command")
+        if grok:
+            result = process_with_grok(req.command, grok, sp)
+        else:
+            result = fallback_keyword(req.command, sp)
+        return {"reply": result}
+
+    @app.get("/devices")
+    def devices():
+        return {"reply": list_devices(sp)}
+
+    @app.get("/profile")
+    def profile():
+        return {"reply": show_profile(sp)}
+
+    return app
 
 
 # ---------------------------------------------------------------------------
@@ -254,10 +440,10 @@ def fallback_keyword(command: str, sp: spotipy.Spotify) -> None:
 # ---------------------------------------------------------------------------
 
 def main():
-    print("=" * 62)
-    print("Harmony AI – Spotify Backend Agent")
+    print("=" * 64)
+    print("Harmony AI – Spotify Backend Agent  •  Grok Automation")
     print("Spotipy + xAI (Grok)  •  Org Suite / Sportify")
-    print("=" * 62)
+    print("=" * 64)
 
     sp = create_spotify_client()
     if not sp:
@@ -265,29 +451,47 @@ def main():
 
     grok = create_grok_client()
 
-    print("\n🔍 Checking for 'Sportify' playlist...")
+    # Quick Sportify check
+    log.info("Checking for 'Sportify' playlist...")
     sportify = find_playlist(sp, "Sportify")
     if sportify:
-        print(f"✅ Sportify found (ID: {sportify['id']})")
+        log.info(f"Sportify found (ID: {sportify['id']})")
     else:
-        print("⚠️  Sportify playlist not found yet.")
+        log.warning("Sportify playlist not found yet.")
 
+    # Optional FastAPI mode
+    if "--api" in sys.argv or os.getenv("HARMONY_API", "").lower() in ("1", "true", "yes"):
+        app = create_api(sp, grok)
+        if app:
+            import uvicorn
+            port = int(os.getenv("PORT", "8080"))
+            log.info(f"Starting FastAPI server on port {port}")
+            uvicorn.run(app, host="0.0.0.0", port=port)
+            return
+        else:
+            log.error("Cannot start API mode – FastAPI missing.")
+            sys.exit(1)
+
+    # Interactive CLI mode
     print("\nReady. Type natural language commands (or 'quit' to exit).")
-    print("Examples: “list my playlists”, “find the Sportify playlist”, “who am I?”")
+    print("Examples: “list my playlists”, “transfer to iPhone”, “play my top tracks”, “find Sportify”")
+    print("Tip: run with --api to start the remote control server.\n")
 
     while True:
         try:
-            user_input = input("\nHarmony> ").strip()
+            user_input = input("Harmony> ").strip()
             if not user_input:
                 continue
-            if user_input.lower() in ("quit", "exit", "q", "deploy"):
-                print("Shutting down. Backend ready for CI/CD or Grok runner.")
+            if user_input.lower() in ("quit", "exit", "q"):
+                print("Shutting down. Backend ready for CI/CD or Grok runners.")
                 break
 
             if grok:
-                process_with_grok(user_input, grok, sp)
+                reply = process_with_grok(user_input, grok, sp)
             else:
-                fallback_keyword(user_input, sp)
+                reply = fallback_keyword(user_input, sp)
+
+            print(reply)
 
         except (KeyboardInterrupt, EOFError):
             print("\nGoodbye.")

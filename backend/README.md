@@ -1,8 +1,8 @@
-# Harmony AI – Spotify Backend Agent
+# Harmony AI – Spotify Backend Agent (Grok Automation)
 
-**Python + Spotipy + xAI (Grok)** headless automation agent.
+**Python + Spotipy + xAI (Grok) + optional FastAPI**
 
-This backend runs independently of the JavaScript + Vite front-end that is deployed on Vercel.
+Production-ready headless agent for OrgSuite automation.
 
 | Layer | Technology | Responsibility |
 |-------|------------|----------------|
@@ -11,14 +11,16 @@ This backend runs independently of the JavaScript + Vite front-end that is deplo
 
 ## Target Account
 - Profile: **Org Suite**
-- Username: `31f7pokhxg2zwvdtlimynslkb5wy`
 - Key playlist: **Sportify**
 
 ## Features
 - Secure headless Spotify authentication (token caching)
-- Natural language commands processed by Grok via the official xAI API
-- Structured JSON intent system
-- Fallback keyword matching if Grok is unavailable
+- Natural language commands processed by **Grok** via official xAI API
+- Structured JSON intent system with robust fallbacks
+- Premium detection and clear warnings
+- Device list + smart transfer (iPhone priority)
+- Play top tracks / search & play
+- Optional **FastAPI remote control** (`--api` mode) for OrgSuite and other AIs
 - Fully environment-variable driven (no secrets in code)
 
 ## Setup
@@ -37,29 +39,44 @@ SPOTIFY_CLIENT_SECRET=...
 SPOTIFY_REDIRECT_URI=http://localhost:8080
 
 XAI_API_KEY=...          # from https://console.x.ai
-XAI_MODEL=grok-3         # or the model you prefer
+XAI_MODEL=grok-3         # or preferred model
 ```
 
-## Run
+## Run – Interactive CLI
 
 ```bash
 python spotify_agent.py
 ```
 
-On first run you will authorize the Org Suite Spotify account once.  
-Afterwards the agent is fully headless and ready for Grok / CI runners.
-
-## Example Commands
+Examples:
 ```
 list my playlists
 find the Sportify playlist
+list devices
+transfer to iPhone
+play my top tracks
+play lo-fi beats
 who am I?
-help
 ```
 
+## Run – Remote API Mode (recommended for automation)
+
+```bash
+python spotify_agent.py --api
+# or
+HARMONY_API=1 python spotify_agent.py
+```
+
+Endpoints:
+- `GET  /health`     → status + premium check
+- `POST /command`    → `{"command": "transfer to iPhone"}`
+- `GET  /devices`
+- `GET  /profile`
+
 ## Architecture Notes
-- The front-end (Vercel) continues to use PKCE and never sees the Client Secret.
+- Front-end (Vercel) continues to use PKCE and never sees the Client Secret.
 - This backend uses Client ID + Client Secret and is intended only for trusted server environments.
 - Grok is called through the official `openai` Python package pointed at `https://api.x.ai/v1`.
+- Premium is required for playback control and device transfer.
 
-Ready for GitHub, GitLab, Codex, and Grok automation pipelines.
+Ready for GitHub Actions, Codex, Grok runners, and OrgSuite remote control.
