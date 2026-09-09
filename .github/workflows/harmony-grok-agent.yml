@@ -11,6 +11,13 @@ on:
         required: false
         default: 'list devices'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: harmony-grok-agent
+  cancel-in-progress: true
+
 jobs:
   run-agent:
     runs-on: ubuntu-latest
@@ -120,34 +127,7 @@ jobs:
           HARMONY_COMMAND: ${{ github.event.inputs.command || 'list devices' }}
           HARMONY_HEADLESS: '1'
           CI: 'true'
-        run: |
-          python -c '
-          import os
-          import sys
-          sys.path.insert(0, ".")
-          from spotify_agent import create_spotify_client, create_grok_client, process_with_grok, fallback_keyword
-
-          command = os.getenv("HARMONY_COMMAND", "list devices")
-          print(f"HARMONY_COMMAND: {command}")
-
-          sp = create_spotify_client()
-          if not sp:
-              print("Failed to connect to Spotify. Check repository secrets and token cache.")
-              print("Guide: docs/GITHUB_ACTIONS_SECRETS.md")
-              sys.exit(1)
-
-          grok = create_grok_client()
-          print(f"Executing command: {command}")
-
-          if grok:
-              reply = process_with_grok(command, grok, sp)
-          else:
-              reply = fallback_keyword(command, sp)
-
-          print("\n=== AGENT REPLY ===")
-          print(reply)
-          print("===================")
-          '
+        run: python run_oneshot.py
 
       - name: Upload non-secret logs
         if: always() && steps.secrets.outputs.ready == 'true'
