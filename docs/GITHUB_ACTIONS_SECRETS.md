@@ -47,13 +47,14 @@ Then store **either**:
 1. The full contents of `.spotify_token_cache` as secret `SPOTIFY_TOKEN_CACHE`
 2. Or only the `refresh_token` field as secret `SPOTIFY_REFRESH_TOKEN`
 
-`.gitignore` must keep `.env` and `.spotify_token_cache` out of git.
+This repository now gitignores `.env` and `.spotify_token_cache`.
 
 ## After secrets are set
 
-1. Re-run **Harmony Grok Agent – Scheduled Automation** with command `list devices`
-2. Daily 08:00 UTC runs will execute instead of skipping
-3. Keep the Client Secret out of Vercel front-end env (`VITE_*` is PKCE-only)
+1. Merge this change to `main` if it is not already merged
+2. Re-run **Harmony Grok Agent – Scheduled Automation** with command `list devices`
+3. Daily 08:00 UTC runs will execute instead of skipping
+4. Keep the Client Secret out of Vercel front-end env (`VITE_*` is PKCE-only)
 
 ## Security notes
 
