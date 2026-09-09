@@ -66,6 +66,39 @@ XAI_API_KEY = os.getenv("XAI_API_KEY")
 XAI_MODEL   = os.getenv("XAI_MODEL", "grok-3")
 
 CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".spotify_token_cache")
+SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN")
+SPOTIFY_TOKEN_CACHE = os.getenv("SPOTIFY_TOKEN_CACHE")
+
+
+def _is_headless() -> bool:
+    return os.getenv("CI", "").lower() == "true" or os.getenv("HARMONY_HEADLESS", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def _restore_token_cache() -> None:
+    """Restore a pre-authorized cache for headless / GitHub Actions runs."""
+    raw = (SPOTIFY_TOKEN_CACHE or "").strip()
+    if raw:
+        with open(CACHE_PATH, "w", encoding="utf-8") as handle:
+            handle.write(raw if raw.endswith("\n") else raw + "\n")
+        log.info("Restored Spotify token cache from SPOTIFY_TOKEN_CACHE.")
+        return
+    refresh = (SPOTIFY_REFRESH_TOKEN or "").strip()
+    if refresh:
+        payload = {
+            "refresh_token": refresh,
+            "token_type": "Bearer",
+            "scope": SPOTIFY_SCOPE,
+            "expires_in": 0,
+            "expires_at": 0,
+        }
+        with open(CACHE_PATH, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        log.info("Wrote minimal Spotify cache from SPOTIFY_REFRESH_TOKEN.")
+
 
 # ---------------------------------------------------------------------------
 # xAI (Grok) client
@@ -90,7 +123,23 @@ def create_grok_client() -> Optional[OpenAI]:
 
 def create_spotify_client() -> Optional[spotipy.Spotify]:
     if not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
-        log.error("Missing Spotify credentials. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env")
+        if _is_headless() or os.getenv("GITHUB_ACTIONS"):
+            log.error(
+                "Missing Spotify credentials. Set GitHub Actions repository secrets "
+                "SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET. "
+                "See docs/GITHUB_ACTIONS_SECRETS.md"
+            )
+        else:
+            log.error("Missing Spotify credentials. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env")
+        return None
+
+    _restore_token_cache()
+    headless = _is_headless()
+    if headless and not os.path.exists(CACHE_PATH) and not (SPOTIFY_REFRESH_TOKEN or "").strip():
+        log.error(
+            "Headless mode needs a cached user token. Set SPOTIFY_TOKEN_CACHE or "
+            "SPOTIFY_REFRESH_TOKEN. Interactive browser login is disabled in CI."
+        )
         return None
 
     try:
@@ -100,7 +149,7 @@ def create_spotify_client() -> Optional[spotipy.Spotify]:
             redirect_uri=SPOTIFY_REDIRECT_URI,
             scope=SPOTIFY_SCOPE,
             cache_path=CACHE_PATH,
-            open_browser=True,
+            open_browser=not headless,
             show_dialog=False
         )
         sp = spotipy.Spotify(auth_manager=auth_manager)
