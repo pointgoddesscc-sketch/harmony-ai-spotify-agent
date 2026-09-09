@@ -143,6 +143,7 @@ tests/               Vitest integration tests
 | Create app disabled | Policy banner / temporary hold; try desktop; Premium may be required |
 | Login redirect error | Redirect URI must match exactly (see above) |
 | Transfer / SDK fails | Spotify Premium required |
+| Actions: Missing Spotify credentials | Add repo secrets (not Vercel `VITE_*`). See `docs/GITHUB_ACTIONS_SECRETS.md` |
 
 ---
 
