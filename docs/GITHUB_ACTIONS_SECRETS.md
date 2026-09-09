@@ -12,6 +12,8 @@ Failed run example (2026-09-09, run 38):
 
 That is a **configuration** failure, not a code defect.
 
+PR #2 is merged to `main`. The remaining owner step is adding repository secrets.
+
 ## Required secrets
 
 Repo → **Settings → Secrets and variables → Actions**:
@@ -47,17 +49,17 @@ Then store **either**:
 1. The full contents of `.spotify_token_cache` as secret `SPOTIFY_TOKEN_CACHE`
 2. Or only the `refresh_token` field as secret `SPOTIFY_REFRESH_TOKEN`
 
-This repository now gitignores `.env` and `.spotify_token_cache`.
+This repository gitignores `.env` and `.spotify_token_cache`.
 
 ## After secrets are set
 
-1. Merge this change to `main` if it is not already merged
-2. Re-run **Harmony Grok Agent – Scheduled Automation** with command `list devices`
-3. Daily 08:00 UTC runs will execute instead of skipping
-4. Keep the Client Secret out of Vercel front-end env (`VITE_*` is PKCE-only)
+1. Re-run **Harmony Grok Agent – Scheduled Automation** with command `list devices`
+2. Daily 08:00 UTC runs will execute instead of skipping
+3. Keep the Client Secret out of Vercel front-end env (`VITE_*` is PKCE-only)
 
 ## Security notes
 
 - The workflow no longer uploads `backend/.env` as an artifact.
 - Scheduled runs with missing secrets now **skip cleanly** instead of failing red every morning.
 - Manual `workflow_dispatch` still fails loudly if secrets are absent so the setup gap is visible.
+- The official production app is the Vercel project `harmony-ai-spotify-agent`. The extra project `harmony-ai-spotify-agent-rtkv` is a duplicate Git link with root `api/` and is not required for Harmony.
