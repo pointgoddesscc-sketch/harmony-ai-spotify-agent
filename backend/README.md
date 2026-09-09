@@ -73,6 +73,17 @@ Endpoints:
 - `GET  /devices`
 - `GET  /profile`
 
+## GitHub Actions
+
+Scheduled `list devices` runs use **repository secrets**, not a phone-side `.env`.
+
+Required secrets:
+- `SPOTIFY_CLIENT_ID`
+- `SPOTIFY_CLIENT_SECRET`
+- `SPOTIFY_TOKEN_CACHE` or `SPOTIFY_REFRESH_TOKEN`
+
+See [docs/GITHUB_ACTIONS_SECRETS.md](../docs/GITHUB_ACTIONS_SECRETS.md).
+
 ## Architecture Notes
 - Front-end (Vercel) continues to use PKCE and never sees the Client Secret.
 - This backend uses Client ID + Client Secret and is intended only for trusted server environments.
