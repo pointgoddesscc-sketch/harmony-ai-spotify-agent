@@ -2,9 +2,9 @@ name: Harmony Grok Agent – Scheduled Automation
 
 on:
   schedule:
-    # Runs every day at 08:00 UTC (adjust as needed)
+    # Runs every day at 08:00 UTC
     - cron: '0 8 * * *'
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+  workflow_dispatch:
     inputs:
       command:
         description: 'Natural language command for the Grok agent'
@@ -22,7 +22,56 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check required GitHub secrets
+        id: secrets
+        env:
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          SPOTIFY_TOKEN_CACHE: ${{ secrets.SPOTIFY_TOKEN_CACHE }}
+          SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
+        run: |
+          set +x
+          missing=0
+          if [ -z "$SPOTIFY_CLIENT_ID" ]; then
+            echo "MISSING: SPOTIFY_CLIENT_ID"
+            missing=1
+          else
+            echo "PRESENT: SPOTIFY_CLIENT_ID (${#SPOTIFY_CLIENT_ID} chars)"
+          fi
+          if [ -z "$SPOTIFY_CLIENT_SECRET" ]; then
+            echo "MISSING: SPOTIFY_CLIENT_SECRET"
+            missing=1
+          else
+            echo "PRESENT: SPOTIFY_CLIENT_SECRET (${#SPOTIFY_CLIENT_SECRET} chars)"
+          fi
+          if [ -z "$SPOTIFY_TOKEN_CACHE" ] && [ -z "$SPOTIFY_REFRESH_TOKEN" ]; then
+            echo "MISSING: SPOTIFY_TOKEN_CACHE or SPOTIFY_REFRESH_TOKEN (required for headless CI)"
+            missing=1
+          else
+            echo "PRESENT: headless token material"
+          fi
+
+          echo "Setup guide: docs/GITHUB_ACTIONS_SECRETS.md"
+          echo "Repo secrets UI: https://github.com/${{ github.repository }}/settings/secrets/actions"
+
+          if [ "$missing" -ne 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Spotify GitHub Actions secrets are not configured. The agent cannot list devices until they are set."
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              echo "Scheduled run skipped until secrets are set. This is configuration, not a code defect."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Manual run stopped. Add the missing repository secrets, then re-run."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Set up Python
+        if: steps.secrets.outputs.ready == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -30,31 +79,47 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
+        if: steps.secrets.outputs.ready == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Create .env from secrets
+      - name: Prepare headless runtime files
+        if: steps.secrets.outputs.ready == 'true'
         env:
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
           SPOTIFY_REDIRECT_URI: ${{ secrets.SPOTIFY_REDIRECT_URI }}
+          SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
+          SPOTIFY_TOKEN_CACHE: ${{ secrets.SPOTIFY_TOKEN_CACHE }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           XAI_MODEL: ${{ secrets.XAI_MODEL }}
         run: |
-          echo "SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID" >> .env
-          echo "SPOTIFY_CLIENT_SECRET=$SPOTIFY_CLIENT_SECRET" >> .env
-          echo "SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://localhost:8080}" >> .env
-          echo "XAI_API_KEY=$XAI_API_KEY" >> .env
-          echo "XAI_MODEL=${XAI_MODEL:-grok-3}" >> .env
-          # Note: First run may require manual token cache setup.
-          # For fully headless scheduled runs, pre-generate .spotify_token_cache
-          # and store it as a secret or artifact.
+          set +x
+          umask 077
+          : > .env
+          printf 'SPOTIFY_CLIENT_ID=%s\n' "$SPOTIFY_CLIENT_ID" >> .env
+          printf 'SPOTIFY_CLIENT_SECRET=%s\n' "$SPOTIFY_CLIENT_SECRET" >> .env
+          printf 'SPOTIFY_REDIRECT_URI=%s\n' "${SPOTIFY_REDIRECT_URI:-http://localhost:8080}" >> .env
+          printf 'HARMONY_HEADLESS=1\n' >> .env
+          printf 'XAI_MODEL=%s\n' "${XAI_MODEL:-grok-3}" >> .env
+          if [ -n "$XAI_API_KEY" ]; then
+            printf 'XAI_API_KEY=%s\n' "$XAI_API_KEY" >> .env
+          fi
+          if [ -n "$SPOTIFY_REFRESH_TOKEN" ]; then
+            printf 'SPOTIFY_REFRESH_TOKEN=%s\n' "$SPOTIFY_REFRESH_TOKEN" >> .env
+          fi
+          if [ -n "$SPOTIFY_TOKEN_CACHE" ]; then
+            printf '%s\n' "$SPOTIFY_TOKEN_CACHE" > .spotify_token_cache
+            echo "Restored Spotify token cache file."
+          fi
 
       - name: Run Grok Agent (one-shot command)
+        if: steps.secrets.outputs.ready == 'true'
         env:
-          # Pass the command from workflow_dispatch or default
           HARMONY_COMMAND: ${{ github.event.inputs.command || 'list devices' }}
+          HARMONY_HEADLESS: '1'
+          CI: 'true'
         run: |
           python -c '
           import os
@@ -62,13 +127,16 @@ jobs:
           sys.path.insert(0, ".")
           from spotify_agent import create_spotify_client, create_grok_client, process_with_grok, fallback_keyword
 
+          command = os.getenv("HARMONY_COMMAND", "list devices")
+          print(f"HARMONY_COMMAND: {command}")
+
           sp = create_spotify_client()
           if not sp:
-              print("Failed to connect to Spotify. Check secrets and token cache.")
+              print("Failed to connect to Spotify. Check repository secrets and token cache.")
+              print("Guide: docs/GITHUB_ACTIONS_SECRETS.md")
               sys.exit(1)
 
           grok = create_grok_client()
-          command = os.getenv("HARMONY_COMMAND", "list devices")
           print(f"Executing command: {command}")
 
           if grok:
@@ -76,15 +144,18 @@ jobs:
           else:
               reply = fallback_keyword(command, sp)
 
-          print("\\n=== AGENT REPLY ===")
+          print("\n=== AGENT REPLY ===")
           print(reply)
           print("===================")
           '
 
-      - name: Upload logs (optional)
-        if: always()
+      - name: Upload non-secret logs
+        if: always() && steps.secrets.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: harmony-agent-logs
-          path: backend/
+          path: |
+            backend/*.log
+            backend/harmony-agent-output.txt
+          if-no-files-found: ignore
           retention-days: 5
