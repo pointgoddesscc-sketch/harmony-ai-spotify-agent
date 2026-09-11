@@ -52,6 +52,7 @@
 
         <button id="btn-login" class="btn btn-primary btn-block">Connect Spotify</button>
         <button id="btn-logout" class="btn btn-ghost btn-block hidden">Disconnect</button>
+        <a id="btn-telegram-sidebar" class="btn btn-secondary btn-block" href="https://t.me/Orgsute_telegram_bot?start=harmony" target="_blank" rel="noopener">Login Telegram</a>
       </div>
     </aside>
 
@@ -78,6 +79,24 @@
             </a>
             <button class="btn btn-ghost" id="btn-premium-later">Maybe later</button>
           </div>
+        </div>
+
+        <div class="card telegram-card" id="telegram-login-card">
+          <div class="panel-header">
+            <h3>Telegram Login</h3>
+            <span id="telegram-account-status" class="plan-badge free">Login required</span>
+          </div>
+          <p class="muted" id="telegram-account-name">Not connected</p>
+          <p class="muted" id="telegram-next-step" style="margin:10px 0 14px">
+            Use the official Telegram button. After you approve, the OrgSuite bot continues from there — then Connect Spotify on this page.
+          </p>
+          <div id="telegram-login-widget" class="telegram-widget-host"></div>
+          <div class="quick-transfer" style="margin-top:14px">
+            <button id="btn-telegram-open" class="btn btn-primary" type="button">Open Telegram bot</button>
+            <button id="btn-telegram-mcp" class="btn btn-secondary" type="button">Account MCP login</button>
+            <button id="btn-telegram-disconnect" class="btn btn-ghost hidden" type="button">Unlink on this device</button>
+          </div>
+          <p class="muted" style="margin-top:12px">Official bot: <a href="https://t.me/Orgsute_telegram_bot" target="_blank" rel="noopener">@Orgsute_telegram_bot</a>. Harmony never asks for your Telegram password.</p>
         </div>
 
         <div class="grid-2">
@@ -161,7 +180,7 @@
             <div class="message agent">
               <div class="bubble">
                 Hello! I'm Harmony, your Spotify AI agent.<br><br>
-                Try: “Play some chill lo-fi”, “Transfer to iPhone 17 Pro”, “list devices”, or “play on my phone”.
+                Login Telegram on the Dashboard first if you want the OrgSuite bot to continue from there. Then Connect Spotify.
               </div>
             </div>
           </div>
@@ -184,6 +203,13 @@
           </div>
           <div class="settings-row">
             <div>
+              <strong>Telegram Account</strong>
+              <p class="muted" id="settings-telegram">Not connected — use official Login Widget or @Orgsute_telegram_bot</p>
+            </div>
+            <span id="settings-telegram-plan" class="plan-badge free">Off</span>
+          </div>
+          <div class="settings-row">
+            <div>
               <strong>Web Playback SDK</strong>
               <p class="muted">Turns this browser into a Connect device</p>
             </div>
@@ -191,15 +217,12 @@
           </div>
         </div>
 
-        <!-- CONNECTOR STATUS MONITORING -->
         <div class="card" style="margin-top:18px">
           <div class="panel-header">
             <h3>Connected Services</h3>
           </div>
           <p class="muted" style="margin-bottom:12px;font-size:0.82rem">OrgSuite managed connectors. Status is monitored in real time.</p>
-          <div id="connectors-list">
-            <!-- Populated by connectors.js -->
-          </div>
+          <div id="connectors-list"></div>
         </div>
 
         <div class="card" style="margin-top:18px">
@@ -250,7 +273,7 @@
 
         <div class="card" style="margin-top:18px">
           <h3>About</h3>
-          <p class="muted">Harmony AI – Vanilla JS + Vite + PKCE + Web Playback SDK + Spotify Connect</p>
+          <p class="muted">Harmony AI – Vanilla JS + Vite + PKCE + Web Playback SDK + Spotify Connect + Telegram Login Widget</p>
           <p class="muted" style="margin-top:8px">Built for modern website development & marketing teams. OrgSuite Edition.</p>
         </div>
       </section>
