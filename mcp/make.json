@@ -1,0 +1,26 @@
+{
+  "name": "orgsuite-make",
+  "description": "OrgSuite Make.com bridge via Harmony /api/make-event. Auth is Vercel env only.",
+  "endpoint": "https://harmony-ai-spotify-agent.vercel.app/api/make-event",
+  "tools": [
+    {
+      "name": "make.status",
+      "method": "GET",
+      "path": "/api/make-event"
+    },
+    {
+      "name": "make.trigger",
+      "method": "POST",
+      "path": "/api/make-event",
+      "body": { "source": "OrgSuite", "event": "string", "payload": {} }
+    },
+    {
+      "name": "make.scenarios",
+      "note": "Requires official Make MCP OAuth at https://mcp.make.com — not this route."
+    },
+    {
+      "name": "make.logs",
+      "note": "Requires official Make MCP OAuth. Harmony only reports forwarded true/false."
+    }
+  ]
+}
