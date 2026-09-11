@@ -1,7 +1,6 @@
 /**
  * GET /api/connectors
  * Honest connector board for Harmony Settings.
- * Browser Spotify/Telegram sessions are client-side; this reports the workplace stack.
  */
 
 export default async function handler(req, res) {
@@ -13,6 +12,8 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const makeConfigured = Boolean(process.env.MAKE_HARMONY_WEBHOOK_URL);
 
   const connectors = [
     {
@@ -65,6 +66,17 @@ export default async function handler(req, res) {
       status: 'connected',
       note: 'Workplace team live',
       href: 'https://linear.app/pse-management',
+    },
+    {
+      id: 'make',
+      name: 'Make.com',
+      icon: '⚙️',
+      account: 'OrgSuite-Grok-In',
+      status: makeConfigured ? 'connected' : 'requires_authorization',
+      note: makeConfigured
+        ? 'Webhook env set on Vercel'
+        : 'Grok Make tile + MAKE_HARMONY_WEBHOOK_URL still required',
+      href: '/api/make-event',
     },
     {
       id: 'telegram',
