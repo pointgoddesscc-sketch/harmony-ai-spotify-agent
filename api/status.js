@@ -16,9 +16,13 @@ export default async function handler(req, res) {
     live: 'https://harmony-ai-spotify-agent.vercel.app',
     github: 'https://github.com/pointgoddesscc-sketch/harmony-ai-spotify-agent',
     vercelProject: 'harmony-ai-spotify-agent',
-    vercelDuplicatePaused: 'harmony-ai-spotify-agent-rtkv',
     chat: '/api/chat',
     harmony: '/api/harmony',
+    telegramLogin: '/api/telegram-login',
+    telegramBot: 'https://t.me/Orgsute_telegram_bot?start=harmony',
+    telegramBotRuntime: 'https://orgsuite-telegram-bot.vercel.app',
+    telegramUserMcp: 'https://pse-sent-telegram-mcp.vercel.app',
     spotifyOAuth: 'requires_authorization_in_browser',
+    telegramOAuth: 'official_login_widget_or_bot_start',
   });
 }
