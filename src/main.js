@@ -9,11 +9,11 @@ import * as api from './spotify-api.js';
 import * as player from './player.js';
 import { processMessage } from './agent.js';
 import { updateDevModeBadge, handlePremiumBanner } from './premium-ui.js';
-import { renderConnectors, updateSpotifyConnectorStatus } from './connectors.js';
+import { renderConnectors, updateSpotifyConnectorStatus, updateTelegramConnectorStatus } from './connectors.js';
 import { startPolling, stopPolling } from './polling.js';
 import { showMissingKeyWarning } from './config-check.js';
+import { initTelegram, getTelegramSession, botStartUrl } from './telegram.js';
 
-// ── DOM references ──────────────────────────────────────────────────
 const btnLogin = document.getElementById('btn-login');
 const btnLogout = document.getElementById('btn-logout');
 const userChip = document.getElementById('user-chip');
@@ -52,6 +52,8 @@ document.addEventListener('DOMContentLoaded', init);
 async function init() {
   renderConnectors();
   showMissingKeyWarning();
+  initTelegram({ onLinked: handleTelegramLinked });
+  updateTelegramConnectorStatus(getTelegramSession());
 
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -95,7 +97,6 @@ async function init() {
     settingsRedirect.textContent = window.location.origin + '/callback';
   }
 
-  // OAuth callback
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   if (code) {
@@ -120,6 +121,23 @@ async function init() {
       const err = getConfigError();
       if (err) addMessage('agent', `⚠️ ${err.message}`);
     }
+  }
+}
+
+function handleTelegramLinked(session) {
+  updateTelegramConnectorStatus(session);
+  if (!session?.id) {
+    addMessage('agent', 'Telegram unlinked on this device.');
+    return;
+  }
+  const label = session.username ? `@${session.username}` : session.first_name || 'Telegram user';
+  addMessage(
+    'agent',
+    `Telegram linked as ${label}.\n\nNext: Telegram takes it from here in @Orgsute_telegram_bot.\nThen tap Connect Spotify on this page so Harmony can control playback.`
+  );
+  window.open(botStartUrl(), '_blank', 'noopener');
+  if (!isLoggedIn()) {
+    addMessage('agent', 'Spotify is not connected yet. Use Connect Spotify when you are back.');
   }
 }
 
@@ -149,6 +167,7 @@ async function onAuthenticated() {
     updateDevModeBadge(isPremium);
     handlePremiumBanner(isPremium);
     updateSpotifyConnectorStatus(true, isPremium);
+    updateTelegramConnectorStatus(getTelegramSession());
 
     if (!isPremium) {
       addMessage('agent', `Welcome, ${productInfo.display_name}!\n\n⚠️ Your account is on Spotify Free.\n\nFull playback control, transfer to iPhone, and the Web Playback device require Spotify Premium.\n\nYou can still:\n• Search tracks\n• View your library & top tracks\n• List available devices\n\nUpgrade to Premium to unlock the complete Harmony AI agent.`);
@@ -234,6 +253,7 @@ function setLoggedOutUI() {
   updateDevModeBadge(false);
   handlePremiumBanner(false);
   updateSpotifyConnectorStatus(false, false);
+  updateTelegramConnectorStatus(getTelegramSession());
   stopPolling();
 }
 
