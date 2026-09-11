@@ -1,7 +1,6 @@
 /**
- * POST /api/make-event
- * Forwards an OrgSuite event to MAKE_HARMONY_WEBHOOK_URL when that env is set.
- * Never logs the webhook URL.
+ * GET/POST /api/make-event
+ * Harmony → Make.com bridge. Webhook URL only from env. Never returned.
  */
 
 export default async function handler(req, res) {
@@ -16,12 +15,9 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     return res.status(200).json({
-      ok: true,
-      service: 'harmony-make-event',
+      service: 'make',
       configured,
-      note: configured
-        ? 'Webhook env is set. POST an event to forward it.'
-        : 'Set MAKE_HARMONY_WEBHOOK_URL on Vercel to forward events. Do not commit the URL.',
+      status: configured ? 'ready' : 'missing_webhook',
     });
   }
 
@@ -33,24 +29,25 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       forwarded: false,
-      reason: 'MAKE_HARMONY_WEBHOOK_URL not set',
+      status: 'missing_webhook',
     });
   }
 
-  const hook = process.env.MAKE_HARMONY_WEBHOOK_URL;
-  const key = process.env.MAKE_WEBHOOK_KEY || '';
+  const incoming = req.body || {};
   const body = {
-    source: 'harmony',
-    email: 'pointgoddesscc@gmail.com',
-    event: req.body?.event || 'harmony_event',
+    source: incoming.source || 'OrgSuite',
+    event: incoming.event || 'harmony.event',
+    payload: incoming.payload || incoming,
     at: new Date().toISOString(),
-    payload: req.body?.payload || req.body || {},
   };
 
+  const headers = { 'Content-Type': 'application/json' };
+  if (process.env.MAKE_WEBHOOK_KEY) {
+    headers['x-make-apikey'] = process.env.MAKE_WEBHOOK_KEY;
+  }
+
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (key) headers['x-make-apikey'] = key;
-    const upstream = await fetch(hook, {
+    const upstream = await fetch(process.env.MAKE_HARMONY_WEBHOOK_URL, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -58,9 +55,13 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: upstream.ok,
       forwarded: true,
-      status: upstream.status,
+      status: upstream.ok ? 'ready' : 'upstream_error',
     });
   } catch {
-    return res.status(502).json({ ok: false, forwarded: false, error: 'Make webhook request failed' });
+    return res.status(502).json({
+      ok: false,
+      forwarded: false,
+      status: 'upstream_error',
+    });
   }
 }
