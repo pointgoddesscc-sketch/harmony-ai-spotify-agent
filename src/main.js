@@ -1,7 +1,5 @@
 /**
  * Harmony AI – Main Application Entry (Production Ready)
- * Orchestrates Auth, Web Playback SDK, Device Management, Chat UI & Agent.
- * OrgSuite Edition – Premium UI + Connectors + Polling + Missing-key handling
  */
 
 import { login, logout, isLoggedIn, exchangeCodeForToken, hasValidClientId, getConfigError } from './auth.js';
@@ -13,6 +11,7 @@ import { renderConnectors, updateSpotifyConnectorStatus, updateTelegramConnector
 import { startPolling, stopPolling } from './polling.js';
 import { showMissingKeyWarning } from './config-check.js';
 import { initTelegram, getTelegramSession, botStartUrl } from './telegram.js';
+import { emitMakeEvent } from './make-bridge.js';
 
 const btnLogin = document.getElementById('btn-login');
 const btnLogout = document.getElementById('btn-logout');
@@ -46,6 +45,7 @@ let currentUser = null;
 let currentDeviceId = null;
 let devices = [];
 let isPremium = false;
+let lastMakeTrack = '';
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -135,6 +135,10 @@ function handleTelegramLinked(session) {
     'agent',
     `Telegram linked as ${label}.\n\nNext: Telegram takes it from here in @Orgsute_telegram_bot.\nThen tap Connect Spotify on this page so Harmony can control playback.`
   );
+  emitMakeEvent('telegram.linked', {
+    user: label,
+    telegramId: session.id,
+  });
   window.open(botStartUrl(), '_blank', 'noopener');
   if (!isLoggedIn()) {
     addMessage('agent', 'Spotify is not connected yet. Use Connect Spotify when you are back.');
@@ -168,6 +172,10 @@ async function onAuthenticated() {
     handlePremiumBanner(isPremium);
     updateSpotifyConnectorStatus(true, isPremium);
     updateTelegramConnectorStatus(getTelegramSession());
+    emitMakeEvent('spotify.connected', {
+      user: productInfo.display_name || currentUser?.display_name,
+      premium: isPremium,
+    });
 
     if (!isPremium) {
       addMessage('agent', `Welcome, ${productInfo.display_name}!\n\n⚠️ Your account is on Spotify Free.\n\nFull playback control, transfer to iPhone, and the Web Playback device require Spotify Premium.\n\nYou can still:\n• Search tracks\n• View your library & top tracks\n• List available devices\n\nUpgrade to Premium to unlock the complete Harmony AI agent.`);
@@ -351,22 +359,36 @@ function addMessage(role, text) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+function emitTrackIfChanged(name, artist) {
+  const key = `${name}|${artist}`;
+  if (!name || key === lastMakeTrack) return;
+  lastMakeTrack = key;
+  emitMakeEvent('spotify.track.played', {
+    user: currentUser?.display_name || 'Org Suite',
+    track: name,
+    artist,
+  });
+}
+
 function updateNowPlaying(state) {
   if (!state || !state.track_window?.current_track) return;
   const track = state.track_window.current_track;
+  const artist = track.artists.map(a => a.name).join(', ');
   if (trackName) trackName.textContent = track.name;
-  if (trackArtist) trackArtist.textContent = track.artists.map(a => a.name).join(', ');
+  if (trackArtist) trackArtist.textContent = artist;
   if (trackArt && track.album?.images?.[0]) {
     trackArt.src = track.album.images[0].url;
     trackArt.classList.remove('hidden');
   }
   if (btnPlay) btnPlay.textContent = state.paused ? '▶️' : '⏸';
+  if (!state.paused) emitTrackIfChanged(track.name, artist);
 }
 
 function updateNowPlayingFromApi(state) {
   if (!state?.item) return;
+  const artist = state.item.artists.map(a => a.name).join(', ');
   if (trackName) trackName.textContent = state.item.name;
-  if (trackArtist) trackArtist.textContent = state.item.artists.map(a => a.name).join(', ');
+  if (trackArtist) trackArtist.textContent = artist;
   if (trackArt && state.item.album?.images?.[0]) {
     trackArt.src = state.item.album.images[0].url;
     trackArt.classList.remove('hidden');
@@ -374,4 +396,5 @@ function updateNowPlayingFromApi(state) {
   if (btnPlay && typeof state.is_playing === 'boolean') {
     btnPlay.textContent = state.is_playing ? '⏸' : '▶️';
   }
+  if (state.is_playing) emitTrackIfChanged(state.item.name, artist);
 }
